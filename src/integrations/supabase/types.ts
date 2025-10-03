@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      agendamentos: {
+        Row: {
+          campanha: string | null
+          created_at: string | null
+          data_agendamento: string
+          email: string | null
+          id: string
+          nome_cliente: string
+          observacoes: string | null
+          sheets_row_id: string | null
+          status: string | null
+          telefone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          campanha?: string | null
+          created_at?: string | null
+          data_agendamento: string
+          email?: string | null
+          id?: string
+          nome_cliente: string
+          observacoes?: string | null
+          sheets_row_id?: string | null
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          campanha?: string | null
+          created_at?: string | null
+          data_agendamento?: string
+          email?: string | null
+          id?: string
+          nome_cliente?: string
+          observacoes?: string | null
+          sheets_row_id?: string | null
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number
@@ -29,6 +71,113 @@ export type Database = {
           id?: number
           message?: Json
           session_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          agendamento_id: string | null
+          created_at: string | null
+          id: string
+          lida: boolean | null
+          mensagem: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          agendamento_id?: string | null
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          agendamento_id?: string | null
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          ativo: boolean | null
+          cargo: string | null
+          created_at: string | null
+          email: string
+          id: string
+          nome: string
+          password_hash: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          nome: string
+          password_hash: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          nome?: string
+          password_hash?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_instances: {
+        Row: {
+          created_at: string | null
+          id: string
+          instance_id: string | null
+          nome: string
+          qr_code: string | null
+          status: string | null
+          tipo: string
+          ultima_conexao: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          instance_id?: string | null
+          nome: string
+          qr_code?: string | null
+          status?: string | null
+          tipo: string
+          ultima_conexao?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          instance_id?: string | null
+          nome?: string
+          qr_code?: string | null
+          status?: string | null
+          tipo?: string
+          ultima_conexao?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
