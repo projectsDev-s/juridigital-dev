@@ -90,27 +90,20 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Card de Conexões WhatsApp */}
+          {/* Card de Conexão WhatsApp da IA */}
           <Card className="shadow-elegant-lg border-0">
             <CardHeader>
-              <CardTitle className="text-2xl">Conectar WhatsApp</CardTitle>
+              <CardTitle className="text-2xl">Conexão da IA</CardTitle>
               <CardDescription>
-                Gerencie as instâncias de WhatsApp para IA e Escritório
+                Gerencie a conexão do WhatsApp para o chatbot automatizado
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                <WhatsAppConnectionCard
-                  tipo="ia"
-                  titulo="Instância da IA"
-                  descricao="Conexão para o chatbot automatizado"
-                />
-                <WhatsAppConnectionCard
-                  tipo="escritorio"
-                  titulo="Instância do Escritório"
-                  descricao="Conexão para atendimento manual"
-                />
-              </div>
+              <WhatsAppConnectionCard
+                tipo="ia"
+                titulo="Conexão da IA"
+                descricao="Chatbot automatizado via Evolution API"
+              />
             </CardContent>
           </Card>
 

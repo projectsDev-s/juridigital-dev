@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Smartphone, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { Smartphone, RefreshCw, CheckCircle2, XCircle, Wifi } from "lucide-react";
 
 interface WhatsAppConnectionCardProps {
   tipo: "ia" | "escritorio";
@@ -47,48 +47,65 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     setIsConnecting(true);
 
     try {
-      // Aqui você faria a integração real com a Evolution API
-      // Por enquanto, vamos simular gerando um QR Code placeholder
+      const generatedInstanceId = `ia_${Date.now()}`;
       
-      // Atualizar status para "connecting"
-      const { error: updateError } = await supabase
-        .from("whatsapp_instances")
-        .update({
-          status: "connecting",
-          qr_code: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-        })
-        .eq("tipo", tipo);
+      toast.info("Conectando à Evolution API...", {
+        description: "Gerando QR Code",
+      });
 
-      if (updateError) throw updateError;
+      const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
+        body: {
+          action: 'connect',
+          instanceId: generatedInstanceId,
+        },
+      });
 
-      toast.success("Gerando QR Code...", {
-        description: "Escaneie o código com o WhatsApp",
+      if (error) throw error;
+
+      if (!data.success) {
+        throw new Error('Falha ao gerar QR Code');
+      }
+
+      toast.success("QR Code gerado!", {
+        description: "Escaneie o código com seu WhatsApp",
       });
 
       await loadInstanceData();
 
-      // Simular conexão após 3 segundos
-      setTimeout(async () => {
-        const { error } = await supabase
-          .from("whatsapp_instances")
-          .update({
-            status: "connected",
-            ultima_conexao: new Date().toISOString()
-          })
-          .eq("tipo", tipo);
-
-        if (!error) {
-          toast.success("WhatsApp conectado!", {
-            description: `${titulo} conectado com sucesso`,
+      // Iniciar polling para verificar status de conexão
+      const checkInterval = setInterval(async () => {
+        try {
+          const { data: statusData, error: statusError } = await supabase.functions.invoke('whatsapp-qrcode', {
+            body: {
+              action: 'status',
+              instanceId: generatedInstanceId,
+            },
           });
-          await loadInstanceData();
+
+          if (statusError) {
+            clearInterval(checkInterval);
+            return;
+          }
+
+          if (statusData.status === 'connected') {
+            clearInterval(checkInterval);
+            toast.success("WhatsApp conectado!", {
+              description: `${titulo} conectado com sucesso`,
+            });
+            await loadInstanceData();
+          }
+        } catch (err) {
+          console.error('Erro ao verificar status:', err);
         }
-      }, 3000);
+      }, 5000);
+
+      // Limpar polling após 2 minutos
+      setTimeout(() => clearInterval(checkInterval), 120000);
 
     } catch (error: any) {
       console.error("Erro ao conectar:", error);
       toast.error("Erro ao conectar WhatsApp", {
-        description: error.message || "Tente novamente",
+        description: error.message || "Verifique as credenciais da Evolution API",
       });
     } finally {
       setIsConnecting(false);
@@ -97,13 +114,18 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
   const handleDisconnect = async () => {
     try {
-      const { error } = await supabase
-        .from("whatsapp_instances")
-        .update({
-          status: "disconnected",
-          qr_code: null
-        })
-        .eq("tipo", tipo);
+      if (!instanceId) {
+        throw new Error('Instance ID não encontrado');
+      }
+
+      toast.info("Desconectando...");
+
+      const { error } = await supabase.functions.invoke('whatsapp-qrcode', {
+        body: {
+          action: 'disconnect',
+          instanceId: instanceId,
+        },
+      });
 
       if (error) throw error;
 
@@ -111,7 +133,9 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       await loadInstanceData();
     } catch (error: any) {
       console.error("Erro ao desconectar:", error);
-      toast.error("Erro ao desconectar");
+      toast.error("Erro ao desconectar", {
+        description: error.message,
+      });
     }
   };
 
@@ -119,11 +143,19 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     <Card className="shadow-elegant-md border border-border transition-smooth hover:shadow-elegant-lg">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-            status === "connected" ? "bg-green-100 dark:bg-green-900" : "bg-muted"
+          <div className={`h-12 w-12 rounded-lg flex items-center justify-center transition-smooth ${
+            status === "connected" 
+              ? "bg-green-100 dark:bg-green-900/30 shadow-glow" 
+              : status === "connecting"
+              ? "bg-yellow-100 dark:bg-yellow-900/30"
+              : "bg-muted"
           }`}>
-            <Smartphone className={`h-5 w-5 ${
-              status === "connected" ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+            <Wifi className={`h-6 w-6 transition-smooth ${
+              status === "connected" 
+                ? "text-green-600 dark:text-green-400" 
+                : status === "connecting"
+                ? "text-yellow-600 dark:text-yellow-400 animate-pulse"
+                : "text-muted-foreground"
             }`} />
           </div>
           <div className="flex-1">
