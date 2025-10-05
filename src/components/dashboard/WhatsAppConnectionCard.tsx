@@ -47,8 +47,6 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     setIsConnecting(true);
 
     try {
-      const generatedInstanceId = `ia_${Date.now()}`;
-      
       toast.info("Conectando à Evolution API...", {
         description: "Gerando QR Code",
       });
@@ -56,7 +54,6 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'connect',
-          instanceId: generatedInstanceId,
         },
       });
 
@@ -78,7 +75,6 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
           const { data: statusData, error: statusError } = await supabase.functions.invoke('whatsapp-qrcode', {
             body: {
               action: 'status',
-              instanceId: generatedInstanceId,
             },
           });
 
@@ -114,16 +110,11 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
   const handleDisconnect = async () => {
     try {
-      if (!instanceId) {
-        throw new Error('Instance ID não encontrado');
-      }
-
       toast.info("Desconectando...");
 
       const { error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'disconnect',
-          instanceId: instanceId,
         },
       });
 

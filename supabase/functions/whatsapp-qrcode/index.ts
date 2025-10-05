@@ -12,12 +12,13 @@ serve(async (req) => {
   }
 
   try {
-    const { action, instanceId } = await req.json();
+    const { action } = await req.json();
     
     const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
     const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
+    const INSTANCE_NAME = Deno.env.get('EVOLUTION_INSTANCE_NAME');
     
-    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !INSTANCE_NAME) {
       throw new Error('Evolution API credentials not configured');
     }
 
@@ -26,32 +27,10 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === 'connect') {
-      console.log(`Connecting instance: ${instanceId}`);
+      console.log(`Connecting to instance: ${INSTANCE_NAME}`);
       
-      // Criar ou obter instância na Evolution API
-      const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': EVOLUTION_API_KEY,
-        },
-        body: JSON.stringify({
-          instanceName: instanceId,
-          qrcode: true,
-        }),
-      });
-
-      if (!createInstanceResponse.ok) {
-        const errorText = await createInstanceResponse.text();
-        console.error('Error creating instance:', errorText);
-        throw new Error(`Failed to create instance: ${createInstanceResponse.status}`);
-      }
-
-      const instanceData = await createInstanceResponse.json();
-      console.log('Instance created:', instanceData);
-
-      // Obter QR Code
-      const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceId}`, {
+      // Obter QR Code da instância existente
+      const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
           'apikey': EVOLUTION_API_KEY,
@@ -73,11 +52,14 @@ serve(async (req) => {
         .update({
           status: 'connecting',
           qr_code: qrData.base64 || qrData.qrcode?.base64,
-          instance_id: instanceId,
+          instance_id: INSTANCE_NAME,
         })
         .eq('tipo', 'ia');
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        throw updateError;
+      }
 
       return new Response(
         JSON.stringify({
@@ -91,10 +73,10 @@ serve(async (req) => {
     }
 
     if (action === 'disconnect') {
-      console.log(`Disconnecting instance: ${instanceId}`);
+      console.log(`Disconnecting instance: ${INSTANCE_NAME}`);
       
       // Desconectar da Evolution API
-      const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceId}`, {
+      const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${INSTANCE_NAME}`, {
         method: 'DELETE',
         headers: {
           'apikey': EVOLUTION_API_KEY,
@@ -114,7 +96,10 @@ serve(async (req) => {
         })
         .eq('tipo', 'ia');
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        throw updateError;
+      }
 
       return new Response(
         JSON.stringify({ success: true }),
@@ -125,10 +110,10 @@ serve(async (req) => {
     }
 
     if (action === 'status') {
-      console.log(`Checking status for instance: ${instanceId}`);
+      console.log(`Checking status for instance: ${INSTANCE_NAME}`);
       
       // Verificar status na Evolution API
-      const statusResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceId}`, {
+      const statusResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
           'apikey': EVOLUTION_API_KEY,
@@ -136,6 +121,8 @@ serve(async (req) => {
       });
 
       if (!statusResponse.ok) {
+        const errorText = await statusResponse.text();
+        console.error('Error getting status:', errorText);
         throw new Error(`Failed to get status: ${statusResponse.status}`);
       }
 
@@ -159,7 +146,10 @@ serve(async (req) => {
         })
         .eq('tipo', 'ia');
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        throw updateError;
+      }
 
       return new Response(
         JSON.stringify({ 
