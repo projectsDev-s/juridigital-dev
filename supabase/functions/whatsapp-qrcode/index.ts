@@ -127,15 +127,20 @@ serve(async (req) => {
       }
 
       const statusData = await statusResponse.json();
-      console.log('Status received:', statusData);
+      console.log('Status received from Evolution API:', JSON.stringify(statusData));
 
       // Mapear status da Evolution para nosso sistema
       let mappedStatus = 'disconnected';
-      if (statusData.state === 'open' || statusData.instance?.state === 'open') {
+      const actualState = statusData.state || statusData.instance?.state;
+      console.log('Actual state from Evolution:', actualState);
+      
+      if (actualState === 'open') {
         mappedStatus = 'connected';
-      } else if (statusData.state === 'connecting' || statusData.instance?.state === 'connecting') {
+      } else if (actualState === 'connecting') {
         mappedStatus = 'connecting';
       }
+      
+      console.log('Mapped status:', mappedStatus);
 
       // Atualizar banco de dados
       const { error: updateError } = await supabase

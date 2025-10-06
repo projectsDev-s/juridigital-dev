@@ -19,7 +19,8 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
   useEffect(() => {
     loadInstanceData();
-    const interval = setInterval(loadInstanceData, 10000); // Atualizar a cada 10s
+    // Verificar status a cada 5 segundos
+    const interval = setInterval(loadInstanceData, 5000);
     return () => clearInterval(interval);
   }, [tipo]);
 
@@ -69,7 +70,16 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
       await loadInstanceData();
 
-      // Iniciar polling para verificar status de conexão
+      // Verificar status imediatamente após gerar QR code
+      setTimeout(async () => {
+        const { data: statusData } = await supabase.functions.invoke('whatsapp-qrcode', {
+          body: { action: 'status' },
+        });
+        console.log('Status check after QR generation:', statusData);
+        await loadInstanceData();
+      }, 2000);
+
+      // Iniciar polling agressivo para verificar status de conexão
       const checkInterval = setInterval(async () => {
         try {
           const { data: statusData, error: statusError } = await supabase.functions.invoke('whatsapp-qrcode', {
@@ -78,25 +88,29 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
             },
           });
 
+          console.log('Polling status:', statusData);
+
           if (statusError) {
+            console.error('Status error:', statusError);
             clearInterval(checkInterval);
             return;
           }
+
+          await loadInstanceData();
 
           if (statusData.status === 'connected') {
             clearInterval(checkInterval);
             toast.success("WhatsApp conectado!", {
               description: `${titulo} conectado com sucesso`,
             });
-            await loadInstanceData();
           }
         } catch (err) {
           console.error('Erro ao verificar status:', err);
         }
-      }, 5000);
+      }, 3000);
 
-      // Limpar polling após 2 minutos
-      setTimeout(() => clearInterval(checkInterval), 120000);
+      // Limpar polling após 3 minutos
+      setTimeout(() => clearInterval(checkInterval), 180000);
 
     } catch (error: any) {
       console.error("Erro ao conectar:", error);
