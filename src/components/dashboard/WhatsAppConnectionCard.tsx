@@ -108,6 +108,40 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     }
   };
 
+  const handleRefreshQRCode = async () => {
+    setIsConnecting(true);
+
+    try {
+      toast.info("Gerando novo QR Code...");
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
+        body: {
+          action: 'connect',
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data.success) {
+        throw new Error('Falha ao gerar novo QR Code');
+      }
+
+      toast.success("Novo QR Code gerado!", {
+        description: "Escaneie o código com seu WhatsApp",
+      });
+
+      await loadInstanceData();
+
+    } catch (error: any) {
+      console.error("Erro ao atualizar QR Code:", error);
+      toast.error("Erro ao gerar novo QR Code", {
+        description: error.message,
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     try {
       toast.info("Desconectando...");
@@ -178,12 +212,32 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         </div>
 
         {qrCode && status === "connecting" && (
-          <div className="flex justify-center p-4 bg-white rounded-lg">
-            <img 
-              src={qrCode} 
-              alt="QR Code WhatsApp" 
-              className="w-48 h-48"
-            />
+          <div className="space-y-3">
+            <div className="flex justify-center p-4 bg-white rounded-lg">
+              <img 
+                src={qrCode} 
+                alt="QR Code WhatsApp" 
+                className="w-48 h-48"
+              />
+            </div>
+            <Button
+              onClick={handleRefreshQRCode}
+              disabled={isConnecting}
+              variant="outline"
+              className="w-full"
+            >
+              {isConnecting ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Gerando novo QR Code...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Atualizar QR Code
+                </>
+              )}
+            </Button>
           </div>
         )}
 
