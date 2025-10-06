@@ -134,9 +134,10 @@ serve(async (req) => {
       const actualState = statusData.state || statusData.instance?.state;
       console.log('Actual state from Evolution:', actualState);
       
-      if (actualState === 'open') {
+      // Aceitar múltiplos formatos de status
+      if (actualState === 'open' || actualState === 'connected') {
         mappedStatus = 'connected';
-      } else if (actualState === 'connecting') {
+      } else if (actualState === 'connecting' || actualState === 'close') {
         mappedStatus = 'connecting';
       }
       

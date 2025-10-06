@@ -19,9 +19,37 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
   useEffect(() => {
     loadInstanceData();
+    
+    // Setup realtime subscription
+    const channel = supabase
+      .channel('whatsapp-instances-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_instances',
+          filter: `tipo=eq.${tipo}`
+        },
+        (payload) => {
+          console.log('Realtime update:', payload);
+          if (payload.new && typeof payload.new === 'object') {
+            const newData = payload.new as any;
+            setStatus(newData.status || "disconnected");
+            setQrCode(newData.qr_code);
+            setInstanceId(newData.id);
+          }
+        }
+      )
+      .subscribe();
+
     // Verificar status a cada 5 segundos
     const interval = setInterval(loadInstanceData, 5000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, [tipo]);
 
   const loadInstanceData = async () => {
@@ -156,6 +184,33 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     }
   };
 
+  const handleRefreshStatus = async () => {
+    try {
+      toast.info("Verificando status...");
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
+        body: {
+          action: 'status',
+        },
+      });
+
+      if (error) throw error;
+
+      console.log('Status manual check:', data);
+
+      await loadInstanceData();
+      
+      toast.success("Status atualizado", {
+        description: `Status: ${data.status === 'connected' ? 'Conectado' : data.status === 'connecting' ? 'Conectando' : 'Desconectado'}`,
+      });
+    } catch (error: any) {
+      console.error("Erro ao verificar status:", error);
+      toast.error("Erro ao verificar status", {
+        description: error.message,
+      });
+    }
+  };
+
   const handleDisconnect = async () => {
     try {
       toast.info("Desconectando...");
@@ -214,15 +269,25 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
           <span className="text-sm font-medium">Status:</span>
-          <span className={`text-sm font-semibold ${
-            status === "connected" ? "text-green-600 dark:text-green-400" : 
-            status === "connecting" ? "text-yellow-600 dark:text-yellow-400" : 
-            "text-muted-foreground"
-          }`}>
-            {status === "connected" ? "Conectado" : 
-             status === "connecting" ? "Conectando..." : 
-             "Desconectado"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-semibold ${
+              status === "connected" ? "text-green-600 dark:text-green-400" : 
+              status === "connecting" ? "text-yellow-600 dark:text-yellow-400" : 
+              "text-muted-foreground"
+            }`}>
+              {status === "connected" ? "Conectado" : 
+               status === "connecting" ? "Conectando..." : 
+               "Desconectado"}
+            </span>
+            <Button
+              onClick={handleRefreshStatus}
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         {qrCode && status === "connecting" && (
