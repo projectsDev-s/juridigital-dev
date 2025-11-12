@@ -90,41 +90,44 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* Card de Conexão WhatsApp da IA */}
-          <Card className="shadow-elegant-lg border-0">
-            <CardHeader>
-              <CardTitle className="text-2xl">Conexão da IA</CardTitle>
-              <CardDescription>
-                Gerencie a conexão do WhatsApp para o chatbot automatizado
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WhatsAppConnectionCard
-                tipo="ia"
-                titulo="Conexão da IA"
-                descricao="Chatbot automatizado via Evolution API"
-              />
-            </CardContent>
-          </Card>
+          {/* Cards em Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card de Conexão WhatsApp da IA */}
+            <Card className="shadow-elegant-lg border-0">
+              <CardHeader>
+                <CardTitle className="text-2xl">Conexão da IA</CardTitle>
+                <CardDescription>
+                  Gerencie a conexão do WhatsApp para o chatbot automatizado
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <WhatsAppConnectionCard
+                  tipo="ia"
+                  titulo="Conexão da IA"
+                  descricao="Chatbot automatizado via Evolution API"
+                />
+              </CardContent>
+            </Card>
 
-          {/* Seção de Agendamentos */}
-          <Card className="shadow-elegant-lg border-0">
-            <CardHeader>
-              <CardTitle className="text-2xl">Agendamentos</CardTitle>
-              <CardDescription>
-                Visualize e gerencie os agendamentos confirmados
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={() => setShowAgendamentos(true)}
-                className="gradient-primary hover:opacity-90 transition-smooth shadow-elegant-md"
-                size="lg"
-              >
-                Listar Agendamentos
-              </Button>
-            </CardContent>
-          </Card>
+            {/* Seção de Agendamentos */}
+            <Card className="shadow-elegant-lg border-0">
+              <CardHeader>
+                <CardTitle className="text-2xl">Agendamentos</CardTitle>
+                <CardDescription>
+                  Visualize e gerencie os agendamentos confirmados
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => setShowAgendamentos(true)}
+                  className="gradient-primary hover:opacity-90 transition-smooth shadow-elegant-md"
+                  size="lg"
+                >
+                  Listar Agendamentos
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
 
