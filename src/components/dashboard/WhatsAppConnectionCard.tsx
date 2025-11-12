@@ -338,13 +338,22 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         )}
 
         {status === "connected" && (
-          <Button
-            onClick={handleDisconnect}
-            variant="destructive"
-            className="w-full"
-          >
-            Desconectar
-          </Button>
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="flex-1">
+                <p className="font-semibold text-green-900 dark:text-green-100">WhatsApp Conectado</p>
+                <p className="text-sm text-green-700 dark:text-green-300">Sua instância está ativa e pronta para uso</p>
+              </div>
+            </div>
+            <Button
+              onClick={handleDisconnect}
+              variant="destructive"
+              className="w-full"
+            >
+              Desconectar
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>
