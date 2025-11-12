@@ -29,7 +29,49 @@ serve(async (req) => {
     if (action === 'connect') {
       console.log(`Connecting to instance: ${INSTANCE_NAME}`);
       
-      // Obter QR Code da instância existente
+      // Primeiro, verificar se a instância existe
+      const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
+        method: 'GET',
+        headers: {
+          'apikey': EVOLUTION_API_KEY,
+        },
+      });
+
+      // Se a instância não existe (404), criar ela
+      if (checkInstanceResponse.status === 404) {
+        console.log(`Instance ${INSTANCE_NAME} does not exist. Creating...`);
+        
+        const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+          method: 'POST',
+          headers: {
+            'apikey': EVOLUTION_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            instanceName: INSTANCE_NAME,
+            token: Deno.env.get('EVOLUTION_INSTANCE_TOKEN'),
+            qrcode: true,
+            integration: 'WHATSAPP-BAILEYS',
+          }),
+        });
+
+        if (!createInstanceResponse.ok) {
+          const errorText = await createInstanceResponse.text();
+          console.error('Error creating instance:', errorText);
+          throw new Error(`Failed to create instance: ${createInstanceResponse.status} - ${errorText}`);
+        }
+
+        const createData = await createInstanceResponse.json();
+        console.log('Instance created successfully:', createData);
+      } else if (!checkInstanceResponse.ok) {
+        const errorText = await checkInstanceResponse.text();
+        console.error('Error checking instance:', errorText);
+        throw new Error(`Failed to check instance: ${checkInstanceResponse.status}`);
+      } else {
+        console.log(`Instance ${INSTANCE_NAME} already exists`);
+      }
+      
+      // Agora obter QR Code da instância
       const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
@@ -40,7 +82,7 @@ serve(async (req) => {
       if (!qrCodeResponse.ok) {
         const errorText = await qrCodeResponse.text();
         console.error('Error getting QR code:', errorText);
-        throw new Error(`Failed to get QR code: ${qrCodeResponse.status}`);
+        throw new Error(`Failed to get QR code: ${qrCodeResponse.status} - ${errorText}`);
       }
 
       const qrData = await qrCodeResponse.json();
