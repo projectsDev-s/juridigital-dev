@@ -179,8 +179,10 @@ serve(async (req) => {
       // Aceitar múltiplos formatos de status
       if (actualState === 'open' || actualState === 'connected') {
         mappedStatus = 'connected';
-      } else if (actualState === 'connecting' || actualState === 'close') {
+      } else if (actualState === 'connecting') {
         mappedStatus = 'connecting';
+      } else if (actualState === 'close' || !actualState) {
+        mappedStatus = 'disconnected';
       }
       
       console.log('Mapped status:', mappedStatus);
