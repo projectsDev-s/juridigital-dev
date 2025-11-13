@@ -299,24 +299,31 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
                 className="w-48 h-48"
               />
             </div>
-            <Button
-              onClick={handleRefreshQRCode}
-              disabled={isConnecting}
-              variant="outline"
-              className="w-full"
-            >
-              {isConnecting ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Gerando novo QR Code...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Atualizar QR Code
-                </>
-              )}
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={handleRefreshQRCode}
+                disabled={isConnecting}
+                variant="outline"
+              >
+                {isConnecting ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Atualizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Atualizar QR
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleDisconnect}
+                variant="destructive"
+              >
+                Cancelar
+              </Button>
+            </div>
           </div>
         )}
 
