@@ -31,11 +31,11 @@ interface Agendamento {
   id: string;
   nome_cliente: string;
   telefone: string;
-  email: string;
-  data_agendamento: string;
+  data_agendada: string;
+  hora_agendada: string;
   campanha: string;
   status: string;
-  observacoes: string;
+  created_at: string;
 }
 
 const AgendamentosModal = ({ open, onOpenChange }: AgendamentosModalProps) => {
@@ -57,7 +57,7 @@ const AgendamentosModal = ({ open, onOpenChange }: AgendamentosModalProps) => {
       let query = supabase
         .from("agendamentos")
         .select("*")
-        .order("data_agendamento", { ascending: false });
+        .order("data_agendada", { ascending: false });
 
       const { data, error } = await query;
 
@@ -85,8 +85,7 @@ const AgendamentosModal = ({ open, onOpenChange }: AgendamentosModalProps) => {
 
   const filteredAgendamentos = agendamentos.filter((agendamento) => {
     const matchesSearch = agendamento.nome_cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         agendamento.telefone.includes(searchTerm) ||
-                         agendamento.email.toLowerCase().includes(searchTerm.toLowerCase());
+                         agendamento.telefone?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === "todos" || agendamento.status === statusFilter;
     const matchesCampanha = campanhaFilter === "todas" || agendamento.campanha === campanhaFilter;
@@ -160,8 +159,8 @@ const AgendamentosModal = ({ open, onOpenChange }: AgendamentosModalProps) => {
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Telefone</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Data/Hora</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Hora</TableHead>
                   <TableHead>Campanha</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -171,12 +170,14 @@ const AgendamentosModal = ({ open, onOpenChange }: AgendamentosModalProps) => {
                   <TableRow key={agendamento.id}>
                     <TableCell className="font-medium">{agendamento.nome_cliente}</TableCell>
                     <TableCell>{agendamento.telefone || "-"}</TableCell>
-                    <TableCell className="text-sm">{agendamento.email || "-"}</TableCell>
                     <TableCell>
-                      {format(new Date(agendamento.data_agendamento), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      {format(new Date(agendamento.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{agendamento.campanha}</Badge>
+                      {agendamento.hora_agendada || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{agendamento.campanha || "-"}</Badge>
                     </TableCell>
                     <TableCell>{getStatusBadge(agendamento.status)}</TableCell>
                   </TableRow>
