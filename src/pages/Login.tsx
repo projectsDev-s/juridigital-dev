@@ -83,7 +83,7 @@ const Login = () => {
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl">Rodrigues & Alves</CardTitle>
+            <CardTitle className="text-2xl">Dias e Gonçalves</CardTitle>
             <CardDescription className="text-base mt-2">
               Painel Administrativo
             </CardDescription>

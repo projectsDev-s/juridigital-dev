@@ -18,12 +18,10 @@ export type Database = {
         Row: {
           campanha: string | null
           created_at: string | null
-          data_agendamento: string
-          email: string | null
+          data_agendada: string
+          hora_agendada: string | null
           id: string
           nome_cliente: string
-          observacoes: string | null
-          sheets_row_id: string | null
           status: string | null
           telefone: string | null
           updated_at: string | null
@@ -31,12 +29,10 @@ export type Database = {
         Insert: {
           campanha?: string | null
           created_at?: string | null
-          data_agendamento: string
-          email?: string | null
+          data_agendada: string
+          hora_agendada?: string | null
           id?: string
           nome_cliente: string
-          observacoes?: string | null
-          sheets_row_id?: string | null
           status?: string | null
           telefone?: string | null
           updated_at?: string | null
@@ -44,12 +40,10 @@ export type Database = {
         Update: {
           campanha?: string | null
           created_at?: string | null
-          data_agendamento?: string
-          email?: string | null
+          data_agendada?: string
+          hora_agendada?: string | null
           id?: string
           nome_cliente?: string
-          observacoes?: string | null
-          sheets_row_id?: string | null
           status?: string | null
           telefone?: string | null
           updated_at?: string | null
