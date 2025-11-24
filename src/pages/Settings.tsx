@@ -26,7 +26,7 @@ const Settings = () => {
       const { data, error } = await supabase
         .from("evolution_config")
         .select("*")
-        .order("created_at", { ascending: false })
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 

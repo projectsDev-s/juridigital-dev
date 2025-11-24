@@ -48,6 +48,7 @@ const Dashboard = () => {
       const { data, error } = await supabase
         .from("evolution_config")
         .select("*")
+        .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 

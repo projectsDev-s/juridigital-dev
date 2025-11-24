@@ -11,7 +11,7 @@ async function getEvolutionConfig(supabase: any) {
   const { data, error } = await supabase
     .from('evolution_config')
     .select('*')
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -22,6 +22,10 @@ async function getEvolutionConfig(supabase: any) {
 
   if (!data) {
     throw new Error('Nenhuma configuração da Evolution API cadastrada');
+  }
+
+  if (!data.api_url || !data.global_key || !data.instance_name) {
+    throw new Error('Configurações da Evolution API incompletas. Atualize-as no menu Configurações.');
   }
 
   return data;
