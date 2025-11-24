@@ -6,6 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Função para buscar configurações do banco de dados
+async function getEvolutionConfig(supabase: any) {
+  const { data, error } = await supabase
+    .from('evolution_config')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Erro ao buscar configurações:', error);
+    throw new Error('Configurações da Evolution API não encontradas');
+  }
+
+  if (!data) {
+    throw new Error('Nenhuma configuração da Evolution API cadastrada');
+  }
+
+  return data;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -14,17 +35,20 @@ serve(async (req) => {
   try {
     const { action } = await req.json();
     
-    const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
-    const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
-    const INSTANCE_NAME = Deno.env.get('EVOLUTION_INSTANCE_NAME');
-    
-    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !INSTANCE_NAME) {
-      throw new Error('Evolution API credentials not configured');
-    }
-
+    // Inicializar cliente Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Buscar configurações do banco de dados
+    const config = await getEvolutionConfig(supabase);
+    const EVOLUTION_API_URL = config.api_url;
+    const EVOLUTION_API_KEY = config.global_key;
+    const INSTANCE_NAME = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'diasgoncalves-ia';
+    
+    console.log('Configurações carregadas do banco de dados');
+    console.log('Ação recebida:', action);
+    console.log('Instance name:', INSTANCE_NAME);
 
     if (action === 'connect') {
       console.log(`Connecting to instance: ${INSTANCE_NAME}`);
