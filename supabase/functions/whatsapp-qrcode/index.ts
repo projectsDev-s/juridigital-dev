@@ -31,6 +31,29 @@ async function getEvolutionConfig(supabase: any) {
   return data;
 }
 
+function extractQrCode(payload: any): string | null {
+  if (!payload) return null;
+
+  const candidates = [
+    payload.base64,
+    payload.base64Image,
+    payload.image,
+    payload.qrcode?.base64,
+    payload.qrcode?.base64Image,
+    payload.qrcode?.code,
+    payload.qrcode?.image,
+    payload.qrCode,
+    payload.qrCode?.base64,
+    payload.qrCode?.base64Image,
+    payload.data?.qrcode?.base64,
+    payload.data?.qrcode?.base64Image,
+    payload.instance?.qrcode?.base64,
+    payload.instance?.qrcode?.base64Image,
+  ];
+
+  return candidates.find((val) => typeof val === 'string' && val.length > 10) || null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -128,14 +151,15 @@ serve(async (req) => {
       }
 
       const qrData = await qrCodeResponse.json();
-      console.log('QR Code received');
+      const qrImage = extractQrCode(qrData);
+      console.log('QR Code received. Has image?', !!qrImage);
 
       // Atualizar banco de dados
       const { error: updateError } = await supabase
         .from('whatsapp_instances')
         .update({
           status: 'connecting',
-          qr_code: qrData.base64 || qrData.qrcode?.base64,
+          qr_code: qrImage,
           instance_id: INSTANCE_NAME,
         })
         .eq('tipo', connectionType);
@@ -148,7 +172,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          qrCode: qrData.base64 || qrData.qrcode?.base64,
+          qrCode: qrImage,
           config: responseMeta,
         }),
         {
@@ -205,38 +229,54 @@ serve(async (req) => {
         },
       });
 
-      if (!statusResponse.ok) {
-        const errorText = await statusResponse.text();
-        console.error('Error getting status:', errorText);
-        throw new Error(`Failed to get status: ${statusResponse.status}`);
-      }
-
-      const statusData = await statusResponse.json();
-      console.log('Status received from Evolution API:', JSON.stringify(statusData));
-
-      // Mapear status da Evolution para nosso sistema
+      let statusData: any = null;
       let mappedStatus = 'disconnected';
-      const actualState = statusData.state || statusData.instance?.state;
-      console.log('Actual state from Evolution:', actualState);
-      
-      // Aceitar múltiplos formatos de status
-      if (actualState === 'open' || actualState === 'connected') {
-        mappedStatus = 'connected';
-      } else if (actualState === 'connecting') {
-        mappedStatus = 'connecting';
-      } else if (actualState === 'close' || !actualState) {
-        mappedStatus = 'disconnected';
+      let ultimaConexao: string | null = null;
+      let statusError: string | null = null;
+
+      if (!statusResponse.ok) {
+        statusError = await statusResponse.text();
+        console.error('Error getting status:', statusError);
+      } else {
+        statusData = await statusResponse.json();
+        console.log('Status received from Evolution API:', JSON.stringify(statusData));
+
+        const actualState =
+          statusData.state ||
+          statusData?.instance?.state ||
+          statusData?.connectionStatus ||
+          statusData?.instance?.connectionStatus;
+
+        console.log('Actual state from Evolution:', actualState);
+
+        if (actualState === 'open' || actualState === 'connected') {
+          mappedStatus = 'connected';
+          ultimaConexao = new Date().toISOString();
+        } else if (
+          actualState === 'connecting' ||
+          actualState === 'pairing' ||
+          actualState === 'waiting_qr_scan'
+        ) {
+          mappedStatus = 'connecting';
+        } else {
+          mappedStatus = 'disconnected';
+        }
       }
       
       console.log('Mapped status:', mappedStatus);
 
-      // Atualizar banco de dados
+      const statusUpdate: Record<string, any> = {
+        status: mappedStatus,
+        ultima_conexao: ultimaConexao,
+      };
+
+      if (mappedStatus !== 'connecting') {
+        statusUpdate.qr_code = null;
+      }
+
       const { error: updateError } = await supabase
         .from('whatsapp_instances')
-        .update({
-          status: mappedStatus,
-          ultima_conexao: mappedStatus === 'connected' ? new Date().toISOString() : null,
-        })
+        .update(statusUpdate)
         .eq('tipo', connectionType);
 
       if (updateError) {
@@ -249,6 +289,8 @@ serve(async (req) => {
           success: true,
           status: mappedStatus,
           config: responseMeta,
+          details: statusData,
+          error: statusError,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
