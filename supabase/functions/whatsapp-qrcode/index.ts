@@ -31,6 +31,20 @@ async function getEvolutionConfig(supabase: any) {
   return data;
 }
 
+function normalizeQrString(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('data:image')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('http')) {
+    return trimmed;
+  }
+  const base64 = trimmed.replace(/^base64,/i, '');
+  return `data:image/png;base64,${base64}`;
+}
+
 function extractQrCode(payload: any): string | null {
   if (!payload) return null;
 
@@ -47,11 +61,21 @@ function extractQrCode(payload: any): string | null {
     payload.qrCode?.base64Image,
     payload.data?.qrcode?.base64,
     payload.data?.qrcode?.base64Image,
+    payload.data?.qrCode,
+    payload.data?.qrCode?.base64,
+    payload.data?.qrCode?.base64Image,
     payload.instance?.qrcode?.base64,
     payload.instance?.qrcode?.base64Image,
+    payload.instance?.qrCode,
+    payload.instance?.qrCode?.base64,
+    payload.instance?.qrCode?.base64Image,
+    payload?.qrcodeUrl,
+    payload?.qrCodeUrl,
+    payload?.url,
   ];
 
-  return candidates.find((val) => typeof val === 'string' && val.length > 10) || null;
+  const raw = candidates.find((val) => typeof val === 'string' && val.length > 10);
+  return normalizeQrString(raw);
 }
 
 serve(async (req) => {
