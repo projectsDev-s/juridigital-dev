@@ -2,8 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bell, LogOut, Scale } from "lucide-react";
+import { LogOut, Scale, Settings } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import WhatsAppConnectionCard from "@/components/dashboard/WhatsAppConnectionCard";
 import AgendamentosModal from "@/components/dashboard/AgendamentosModal";
 import NotificationBell from "@/components/dashboard/NotificationBell";
@@ -63,15 +69,31 @@ const Dashboard = () => {
                 <p className="text-sm font-medium text-foreground">{user.nome}</p>
                 <p className="text-xs text-muted-foreground">{user.cargo}</p>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleLogout}
-                className="transition-smooth hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
-                title="Sair"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="transition-smooth"
+                    title="Menu"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate("/settings")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Configurações
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleLogout}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

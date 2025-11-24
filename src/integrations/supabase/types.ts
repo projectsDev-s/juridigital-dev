@@ -50,6 +50,30 @@ export type Database = {
         }
         Relationships: []
       }
+      evolution_config: {
+        Row: {
+          api_url: string
+          created_at: string
+          global_key: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          api_url: string
+          created_at?: string
+          global_key: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          api_url?: string
+          created_at?: string
+          global_key?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number
