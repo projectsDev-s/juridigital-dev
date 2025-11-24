@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogOut, Scale, Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { LogOut, Scale, Settings, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -13,6 +14,7 @@ import {
 import WhatsAppConnectionCard from "@/components/dashboard/WhatsAppConnectionCard";
 import AgendamentosModal from "@/components/dashboard/AgendamentosModal";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UserSession {
   id: string;
@@ -24,6 +26,8 @@ interface UserSession {
 const Dashboard = () => {
   const [user, setUser] = useState<UserSession | null>(null);
   const [showAgendamentos, setShowAgendamentos] = useState(false);
+  const [isApiConfigured, setIsApiConfigured] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +40,26 @@ const Dashboard = () => {
 
     const userData = JSON.parse(sessionData);
     setUser(userData);
+    checkApiConfiguration();
   }, [navigate]);
+
+  const checkApiConfiguration = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("evolution_config")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setIsApiConfigured(!!data && !!data.api_url && !!data.global_key);
+    } catch (error) {
+      console.error("Erro ao verificar configurações:", error);
+      setIsApiConfigured(false);
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("user_session");
@@ -64,6 +87,24 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {!loadingConfig && (
+                <Badge
+                  variant={isApiConfigured ? "default" : "destructive"}
+                  className="flex items-center gap-1.5"
+                >
+                  {isApiConfigured ? (
+                    <>
+                      <CheckCircle2 className="h-3 w-3" />
+                      API Configurada
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-3 w-3" />
+                      API Não Configurada
+                    </>
+                  )}
+                </Badge>
+              )}
               <NotificationBell onNotificationClick={() => setShowAgendamentos(true)} />
               <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-foreground">{user.nome}</p>
