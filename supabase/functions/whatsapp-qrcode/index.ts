@@ -44,7 +44,8 @@ serve(async (req) => {
     const config = await getEvolutionConfig(supabase);
     const EVOLUTION_API_URL = config.api_url;
     const EVOLUTION_API_KEY = config.global_key;
-    const INSTANCE_NAME = Deno.env.get('EVOLUTION_INSTANCE_NAME') || 'diasgoncalves-ia';
+    const INSTANCE_NAME = config.instance_name || 'sd-dv';
+    const INSTANCE_TOKEN = config.instance_token;
     
     console.log('Configurações carregadas do banco de dados');
     console.log('Ação recebida:', action);
@@ -73,7 +74,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             instanceName: INSTANCE_NAME,
-            token: Deno.env.get('EVOLUTION_INSTANCE_TOKEN'),
+            token: INSTANCE_TOKEN,
             qrcode: true,
             integration: 'WHATSAPP-BAILEYS',
           }),

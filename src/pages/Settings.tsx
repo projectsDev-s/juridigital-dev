@@ -11,6 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 const Settings = () => {
   const [apiUrl, setApiUrl] = useState("");
   const [globalKey, setGlobalKey] = useState("");
+  const [instanceName, setInstanceName] = useState("");
+  const [instanceToken, setInstanceToken] = useState("");
   const [configId, setConfigId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -31,8 +33,10 @@ const Settings = () => {
       if (error) throw error;
 
       if (data) {
-        setApiUrl(data.api_url);
-        setGlobalKey(data.global_key);
+        setApiUrl(data.api_url || "");
+        setGlobalKey(data.global_key || "");
+        setInstanceName(data.instance_name || "");
+        setInstanceToken(data.instance_token || "");
         setConfigId(data.id);
       }
     } catch (error) {
@@ -42,8 +46,8 @@ const Settings = () => {
   };
 
   const handleSave = async () => {
-    if (!apiUrl || !globalKey) {
-      toast.error("Preencha todos os campos");
+    if (!apiUrl || !globalKey || !instanceName) {
+      toast.error("Preencha todos os campos obrigatórios");
       return;
     }
 
@@ -56,6 +60,8 @@ const Settings = () => {
           .update({
             api_url: apiUrl,
             global_key: globalKey,
+            instance_name: instanceName,
+            instance_token: instanceToken,
           })
           .eq("id", configId);
 
@@ -67,6 +73,8 @@ const Settings = () => {
           .insert({
             api_url: apiUrl,
             global_key: globalKey,
+            instance_name: instanceName,
+            instance_token: instanceToken,
           })
           .select()
           .single();
@@ -144,6 +152,34 @@ const Settings = () => {
               />
               <p className="text-xs text-muted-foreground">
                 Chave global de autenticação da Evolution API
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="instance-name">Nome da Instância *</Label>
+              <Input
+                id="instance-name"
+                type="text"
+                placeholder="sd-dv"
+                value={instanceName}
+                onChange={(e) => setInstanceName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Nome da instância WhatsApp (ex: sd-dv)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="instance-token">Token da Instância</Label>
+              <Input
+                id="instance-token"
+                type="password"
+                placeholder="Token opcional"
+                value={instanceToken}
+                onChange={(e) => setInstanceToken(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Token de autenticação da instância (opcional)
               </p>
             </div>
 
