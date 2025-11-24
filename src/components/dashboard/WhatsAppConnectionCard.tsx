@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Smartphone, RefreshCw, CheckCircle2, XCircle, Wifi } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Wifi, AlertCircle } from "lucide-react";
 
 interface WhatsAppConnectionCardProps {
   tipo: "ia" | "escritorio";
@@ -16,9 +16,16 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
   const [instanceId, setInstanceId] = useState<string>("");
+  const [configInfo, setConfigInfo] = useState<{ apiUrl: string; instanceName: string }>({
+    apiUrl: "",
+    instanceName: "",
+  });
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
     loadInstanceData();
+    loadConfigInfo();
     
     // Setup realtime subscription
     const channel = supabase
@@ -52,6 +59,40 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     };
   }, [tipo]);
 
+  const loadConfigInfo = async () => {
+    setConfigLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("evolution_config")
+        .select("*")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setConfigInfo({
+          apiUrl: data.api_url || "",
+          instanceName: data.instance_name || "",
+        });
+      } else {
+        setConfigInfo({
+          apiUrl: "",
+          instanceName: "",
+        });
+      }
+      setConfigError(null);
+    } catch (error) {
+      console.error("Erro ao carregar credenciais:", error);
+      setConfigError("Não foi possível carregar as credenciais da Evolution API.");
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const isConfigReady = !!configInfo.apiUrl;
+
   const loadInstanceData = async () => {
     try {
       const { data, error } = await supabase
@@ -65,7 +106,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       if (data) {
         setStatus(data.status || "disconnected");
         setQrCode(data.qr_code);
-        setInstanceId(data.id);
+        setInstanceId(data.instance_id || "");
       }
     } catch (error) {
       console.error("Erro ao carregar instância:", error);
@@ -73,16 +114,24 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleConnect = async () => {
+    if (!isConfigReady) {
+      toast.error("Configure as credenciais da Evolution API antes de conectar.");
+      return;
+    }
+
     setIsConnecting(true);
 
     try {
       toast.info("Conectando à Evolution API...", {
-        description: "Gerando QR Code",
+        description: configInfo.apiUrl
+          ? `Endpoint: ${configInfo.apiUrl}`
+          : "Configure o endpoint no menu Configurações",
       });
 
       const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'connect',
+          tipo,
         },
       });
 
@@ -101,7 +150,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       // Verificar status imediatamente após gerar QR code
       setTimeout(async () => {
         const { data: statusData } = await supabase.functions.invoke('whatsapp-qrcode', {
-          body: { action: 'status' },
+          body: { action: 'status', tipo },
         });
         console.log('Status check after QR generation:', statusData);
         await loadInstanceData();
@@ -113,6 +162,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
           const { data: statusData, error: statusError } = await supabase.functions.invoke('whatsapp-qrcode', {
             body: {
               action: 'status',
+              tipo,
             },
           });
 
@@ -151,6 +201,11 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleRefreshQRCode = async () => {
+    if (!isConfigReady) {
+      toast.error("Configure as credenciais antes de gerar um novo QR Code.");
+      return;
+    }
+
     setIsConnecting(true);
 
     try {
@@ -159,6 +214,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'connect',
+          tipo,
         },
       });
 
@@ -185,12 +241,18 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleRefreshStatus = async () => {
+    if (!isConfigReady) {
+      toast.error("Configure as credenciais antes de verificar o status.");
+      return;
+    }
+
     try {
       toast.info("Verificando status...");
 
       const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'status',
+          tipo,
         },
       });
 
@@ -212,12 +274,18 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleDisconnect = async () => {
+    if (!isConfigReady) {
+      toast.error("Configure as credenciais antes de desconectar.");
+      return;
+    }
+
     try {
       toast.info("Desconectando...");
 
       const { error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
           action: 'disconnect',
+          tipo,
         },
       });
 
@@ -269,6 +337,25 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
           <span className="text-sm font-medium">Status:</span>
+        <div className="p-3 rounded-lg border border-border/50 bg-background/60 space-y-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Evolution API</p>
+          <p className="text-sm font-mono break-all">
+            {configLoading ? "Carregando endpoint..." : configInfo.apiUrl || "Não configurado"}
+          </p>
+          {configInfo.instanceName && (
+            <p className="text-xs text-muted-foreground">Instância configurada: {configInfo.instanceName}</p>
+          )}
+          {instanceId && (
+            <p className="text-xs text-muted-foreground">Registro atual: {instanceId}</p>
+          )}
+          {!configLoading && (!configInfo.apiUrl || configError) && (
+            <p className="text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {configError || "Defina as credenciais em Configurações"}
+            </p>
+          )}
+        </div>
+
           <div className="flex items-center gap-2">
             <span className={`text-sm font-semibold ${
               status === "connected" ? "text-green-600 dark:text-green-400" : 

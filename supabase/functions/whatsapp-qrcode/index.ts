@@ -37,7 +37,13 @@ serve(async (req) => {
   }
 
   try {
-    const { action } = await req.json();
+    const body = await req.json();
+    const action = body?.action;
+    const connectionType = body?.tipo === 'escritorio' ? 'escritorio' : 'ia';
+
+    if (!action) {
+      throw new Error('Parâmetro "action" é obrigatório.');
+    }
     
     // Inicializar cliente Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -53,7 +59,14 @@ serve(async (req) => {
     
     console.log('Configurações carregadas do banco de dados');
     console.log('Ação recebida:', action);
+    console.log('Tipo solicitado:', connectionType);
     console.log('Instance name:', INSTANCE_NAME);
+
+    const responseMeta = {
+      tipo: connectionType,
+      api_url: EVOLUTION_API_URL,
+      instance_name: INSTANCE_NAME,
+    };
 
     if (action === 'connect') {
       console.log(`Connecting to instance: ${INSTANCE_NAME}`);
@@ -125,7 +138,7 @@ serve(async (req) => {
           qr_code: qrData.base64 || qrData.qrcode?.base64,
           instance_id: INSTANCE_NAME,
         })
-        .eq('tipo', 'ia');
+        .eq('tipo', connectionType);
 
       if (updateError) {
         console.error('Database update error:', updateError);
@@ -136,6 +149,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           qrCode: qrData.base64 || qrData.qrcode?.base64,
+          config: responseMeta,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -165,7 +179,7 @@ serve(async (req) => {
           status: 'disconnected',
           qr_code: null,
         })
-        .eq('tipo', 'ia');
+        .eq('tipo', connectionType);
 
       if (updateError) {
         console.error('Database update error:', updateError);
@@ -173,7 +187,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, config: responseMeta }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
@@ -223,7 +237,7 @@ serve(async (req) => {
           status: mappedStatus,
           ultima_conexao: mappedStatus === 'connected' ? new Date().toISOString() : null,
         })
-        .eq('tipo', 'ia');
+        .eq('tipo', connectionType);
 
       if (updateError) {
         console.error('Database update error:', updateError);
@@ -234,6 +248,7 @@ serve(async (req) => {
         JSON.stringify({ 
           success: true,
           status: mappedStatus,
+          config: responseMeta,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

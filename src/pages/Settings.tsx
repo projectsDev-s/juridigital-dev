@@ -8,8 +8,10 @@ import { ArrowLeft, Save, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+const DEFAULT_API_URL = "https://evo-evolution.fg079w.easypanel.host/";
+
 const Settings = () => {
-  const [apiUrl, setApiUrl] = useState("");
+  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [globalKey, setGlobalKey] = useState("");
   const [instanceName, setInstanceName] = useState("");
   const [instanceToken, setInstanceToken] = useState("");
@@ -33,7 +35,7 @@ const Settings = () => {
       if (error) throw error;
 
       if (data) {
-        setApiUrl(data.api_url || "");
+        setApiUrl(data.api_url || DEFAULT_API_URL);
         setGlobalKey(data.global_key || "");
         setInstanceName(data.instance_name || "");
         setInstanceToken(data.instance_token || "");
@@ -58,7 +60,7 @@ const Settings = () => {
         const { error } = await supabase
           .from("evolution_config")
           .update({
-            api_url: apiUrl,
+            api_url: apiUrl || DEFAULT_API_URL,
             global_key: globalKey,
             instance_name: instanceName,
             instance_token: instanceToken,
@@ -71,7 +73,7 @@ const Settings = () => {
         const { data, error } = await supabase
           .from("evolution_config")
           .insert({
-            api_url: apiUrl,
+            api_url: apiUrl || DEFAULT_API_URL,
             global_key: globalKey,
             instance_name: instanceName,
             instance_token: instanceToken,
