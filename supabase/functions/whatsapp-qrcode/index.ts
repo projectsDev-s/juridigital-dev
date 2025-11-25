@@ -105,9 +105,12 @@ serve(async (req) => {
     const INSTANCE_TOKEN = config.instance_token;
     
     console.log('Configurações carregadas do banco de dados');
+    console.log('API URL:', EVOLUTION_API_URL);
+    console.log('API Key presente:', !!EVOLUTION_API_KEY);
     console.log('Ação recebida:', action);
     console.log('Tipo solicitado:', connectionType);
     console.log('Instance name:', INSTANCE_NAME);
+    console.log('Instance token presente:', !!INSTANCE_TOKEN);
 
     if (action === 'connect') {
       console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
@@ -152,6 +155,8 @@ serve(async (req) => {
       }
       
       // Obter QR Code da instância
+      console.log('Tentando obter QR Code da URL:', `${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`);
+      
       const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
@@ -159,18 +164,29 @@ serve(async (req) => {
         },
       });
 
+      console.log('Status da resposta:', qrCodeResponse.status);
+      const responseText = await qrCodeResponse.text();
+      console.log('Resposta da API (texto):', responseText);
+
       if (!qrCodeResponse.ok) {
-        const errorText = await qrCodeResponse.text();
-        console.error('Erro ao obter QR code:', errorText);
-        throw new Error(`Falha ao obter QR code: ${qrCodeResponse.status} - ${errorText}`);
+        console.error('Erro ao obter QR code:', responseText);
+        throw new Error(`Falha ao obter QR code: ${qrCodeResponse.status} - ${responseText}. Verifique se as credenciais da Evolution API estão corretas em Configurações.`);
       }
 
-      const qrData = await qrCodeResponse.json();
+      let qrData;
+      try {
+        qrData = JSON.parse(responseText);
+        console.log('Estrutura da resposta JSON:', JSON.stringify(qrData, null, 2));
+      } catch (e) {
+        console.error('Falha ao parsear resposta como JSON:', e);
+        throw new Error('Resposta inválida da Evolution API. Verifique a URL da API em Configurações.');
+      }
+
       const qrImage = extractQrCode(qrData);
       
       if (!qrImage) {
-        console.error('QR Code não encontrado na resposta:', JSON.stringify(qrData));
-        throw new Error('QR Code não foi retornado pela Evolution API');
+        console.error('QR Code não encontrado na resposta. Estrutura recebida:', JSON.stringify(qrData, null, 2));
+        throw new Error(`QR Code não encontrado na resposta da Evolution API. Resposta: ${JSON.stringify(qrData)}. Verifique se a instância "${INSTANCE_NAME}" está correta.`);
       }
 
       console.log('QR Code gerado com sucesso');
