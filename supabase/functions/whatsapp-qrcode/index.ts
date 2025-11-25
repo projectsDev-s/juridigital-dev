@@ -96,81 +96,43 @@ serve(async (req) => {
     console.log('Instance token presente:', !!INSTANCE_TOKEN);
 
     if (action === 'connect') {
-      console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
+      console.log(`Buscando QR Code da instância existente: ${INSTANCE_NAME}`);
       
       let qrImage: string | null = null;
       
-      // Deletar instância existente para forçar regeneração do QR Code
-      console.log('Deletando instância existente...');
-      const deleteResponse = await fetch(`${EVOLUTION_API_URL}/instance/delete/${INSTANCE_NAME}`, {
-        method: 'DELETE',
+      // Verificar estado da instância
+      console.log('Verificando estado da instância...');
+      const stateResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
+        method: 'GET',
         headers: {
           'apikey': EVOLUTION_API_KEY,
         },
       });
 
-      if (deleteResponse.ok) {
-        console.log('Instância deletada com sucesso');
-      } else if (deleteResponse.status === 404) {
-        console.log('Instância não existe ainda, será criada');
-      } else {
-        const errorText = await deleteResponse.text();
-        console.log('Aviso ao deletar instância:', errorText);
+      if (stateResponse.ok) {
+        const stateData = await stateResponse.json();
+        console.log('Estado da instância:', JSON.stringify(stateData, null, 2));
+        
+        // Se a instância estiver conectada (open), fazer logout para forçar novo QR
+        if (stateData.state === 'open') {
+          console.log('Instância conectada, fazendo logout para gerar novo QR Code...');
+          const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${INSTANCE_NAME}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': EVOLUTION_API_KEY,
+            },
+          });
+          
+          if (logoutResponse.ok) {
+            console.log('Logout realizado com sucesso');
+            // Aguardar a instância entrar em estado connecting
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+        }
       }
       
-      // Aguardar um pouco após deletar
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Criar instância com o mesmo nome e token
-      console.log('Criando instância...');
-      const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-        method: 'POST',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instanceName: INSTANCE_NAME,
-          token: INSTANCE_TOKEN || undefined,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
-        }),
-      });
-
-      if (!createInstanceResponse.ok) {
-        const errorText = await createInstanceResponse.text();
-        console.error('Erro ao criar instância:', errorText);
-        throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
-      }
-
-      const createResult = await createInstanceResponse.json();
-      console.log('Instância criada:', JSON.stringify(createResult, null, 2));
-      
-      // Aguardar um pouco antes de iniciar conexão
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Iniciar conexão para gerar QR Code (POST request)
-      console.log('Iniciando conexão WhatsApp para gerar QR Code...');
-      const connectResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
-        method: 'POST',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-        },
-      });
-
-      if (!connectResponse.ok) {
-        const errorText = await connectResponse.text();
-        console.error('Erro ao iniciar conexão:', errorText);
-        throw new Error(`Falha ao iniciar conexão: ${connectResponse.status} - ${errorText}`);
-      }
-
-      const connectResult = await connectResponse.json();
-      console.log('Conexão iniciada:', JSON.stringify(connectResult, null, 2));
-      
-      // Aguardar geração do QR Code
-      console.log('Aguardando 5 segundos para geração do QR Code...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
+      // Buscar QR Code da instância (GET, não POST)
+      console.log('Buscando QR Code...');
       for (let attempt = 1; attempt <= 10; attempt++) {
         console.log(`Tentativa ${attempt}/10 de buscar QR Code...`);
         
