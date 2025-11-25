@@ -115,7 +115,7 @@ serve(async (req) => {
     if (action === 'connect') {
       console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
       
-      // Verificar se a instância existe
+      // Verificar se a instância existe e seu estado
       const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
@@ -123,8 +123,27 @@ serve(async (req) => {
         },
       });
 
-      // Se a instância não existe (404), criar ela
-      if (checkInstanceResponse.status === 404) {
+      if (checkInstanceResponse.ok) {
+        const connectionState = await checkInstanceResponse.json();
+        console.log('Estado atual da instância:', JSON.stringify(connectionState, null, 2));
+        
+        // Se a instância já está conectada, desconectar primeiro
+        if (connectionState.state === 'open' || connectionState.instance?.state === 'open') {
+          console.log('Instância já conectada. Desconectando primeiro...');
+          const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${INSTANCE_NAME}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': EVOLUTION_API_KEY,
+            },
+          });
+          
+          if (logoutResponse.ok) {
+            console.log('Instância desconectada com sucesso');
+            // Aguardar um momento antes de tentar reconectar
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      } else if (checkInstanceResponse.status === 404) {
         console.log(`Instância ${INSTANCE_NAME} não existe. Criando...`);
         
         const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
@@ -147,11 +166,14 @@ serve(async (req) => {
           throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
         }
 
-        console.log('Instância criada com sucesso');
-      } else if (!checkInstanceResponse.ok && checkInstanceResponse.status !== 200) {
+        const createResult = await createInstanceResponse.json();
+        console.log('Instância criada com sucesso:', JSON.stringify(createResult, null, 2));
+        
+        // Aguardar um momento para a instância inicializar
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
         const errorText = await checkInstanceResponse.text();
         console.error('Erro ao verificar instância:', errorText);
-        // Continuar mesmo com erro, tentar gerar QR code
       }
       
       // Obter QR Code da instância
@@ -164,9 +186,9 @@ serve(async (req) => {
         },
       });
 
-      console.log('Status da resposta:', qrCodeResponse.status);
+      console.log('Status da resposta QR Code:', qrCodeResponse.status);
       const responseText = await qrCodeResponse.text();
-      console.log('Resposta da API (texto):', responseText);
+      console.log('Resposta completa da API:', responseText);
 
       if (!qrCodeResponse.ok) {
         console.error('Erro ao obter QR code:', responseText);
@@ -182,11 +204,47 @@ serve(async (req) => {
         throw new Error('Resposta inválida da Evolution API. Verifique a URL da API em Configurações.');
       }
 
+      // Se a resposta indica que não há QR code disponível (count: 0)
+      if (qrData.count === 0 || (typeof qrData.count === 'number' && qrData.count === 0)) {
+        console.log('QR Code não disponível (count: 0). A instância pode já estar conectada ou aguardando desconexão.');
+        
+        // Tentar desconectar e reconectar
+        console.log('Tentando desconectar a instância...');
+        const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${INSTANCE_NAME}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': EVOLUTION_API_KEY,
+          },
+        });
+        
+        if (logoutResponse.ok) {
+          console.log('Instância desconectada. Aguardando 3 segundos...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Tentar gerar QR code novamente
+          console.log('Tentando gerar QR Code novamente...');
+          const retryQrResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
+            method: 'GET',
+            headers: {
+              'apikey': EVOLUTION_API_KEY,
+            },
+          });
+          
+          if (retryQrResponse.ok) {
+            const retryResponseText = await retryQrResponse.text();
+            qrData = JSON.parse(retryResponseText);
+            console.log('Segunda tentativa - resposta:', JSON.stringify(qrData, null, 2));
+          } else {
+            throw new Error(`Falha na segunda tentativa de obter QR code: ${retryQrResponse.status}`);
+          }
+        }
+      }
+
       const qrImage = extractQrCode(qrData);
       
       if (!qrImage) {
         console.error('QR Code não encontrado na resposta. Estrutura recebida:', JSON.stringify(qrData, null, 2));
-        throw new Error(`QR Code não encontrado na resposta da Evolution API. Resposta: ${JSON.stringify(qrData)}. Verifique se a instância "${INSTANCE_NAME}" está correta.`);
+        throw new Error(`QR Code não encontrado na resposta da Evolution API. A instância "${INSTANCE_NAME}" pode já estar conectada. Tente desconectar primeiro ou verifique as configurações no painel da Evolution API.`);
       }
 
       console.log('QR Code gerado com sucesso');
