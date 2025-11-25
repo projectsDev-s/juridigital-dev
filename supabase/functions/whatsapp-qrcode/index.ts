@@ -49,12 +49,13 @@ function extractQrCode(payload: any): string | null {
   if (!payload) return null;
 
   const candidates = [
+    payload.code,  // Evolution API retorna assim
     payload.base64,
     payload.base64Image,
     payload.image,
+    payload.qrcode?.code,
     payload.qrcode?.base64,
     payload.qrcode?.base64Image,
-    payload.qrcode?.code,
     payload.qrcode?.image,
     payload.qrCode,
     payload.qrCode?.base64,
@@ -192,29 +193,58 @@ serve(async (req) => {
         console.log('QR Code não veio na criação. Aguardando 5 segundos para geração...');
         await new Promise(resolve => setTimeout(resolve, 5000));
         
-        // Tentar buscar QR Code
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          console.log(`Tentativa ${attempt} de buscar QR Code...`);
+        // Tentar buscar QR Code via fetchInstances primeiro (pode ter informações mais completas)
+        console.log('Buscando informações completas da instância...');
+        const fetchResponse = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${INSTANCE_NAME}`, {
+          method: 'GET',
+          headers: {
+            'apikey': EVOLUTION_API_KEY,
+          },
+        });
+        
+        if (fetchResponse.ok) {
+          const fetchData = await fetchResponse.json();
+          console.log('Resposta fetchInstances:', JSON.stringify(fetchData, null, 2));
           
-          const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
-            method: 'GET',
-            headers: {
-              'apikey': EVOLUTION_API_KEY,
-            },
-          });
+          // fetchInstances pode retornar um array
+          const instanceData = Array.isArray(fetchData) ? fetchData[0] : fetchData;
+          qrImage = extractQrCode(instanceData);
+          
+          if (qrImage) {
+            console.log('QR Code encontrado via fetchInstances!');
+          }
+        }
+        
+        // Se ainda não encontrou, tentar via endpoint connect
+        if (!qrImage) {
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`Tentativa ${attempt} de buscar QR Code via connect...`);
+            
+            const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
+              method: 'GET',
+              headers: {
+                'apikey': EVOLUTION_API_KEY,
+              },
+            });
 
-          if (qrCodeResponse.ok) {
-            const qrData = await qrCodeResponse.json();
-            console.log(`Resposta tentativa ${attempt}:`, JSON.stringify(qrData, null, 2));
-            
-            qrImage = extractQrCode(qrData);
-            
-            if (qrImage) {
-              console.log('QR Code encontrado!');
-              break;
-            } else if (attempt < 3) {
-              console.log('QR Code ainda não disponível. Aguardando 3 segundos...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
+            if (qrCodeResponse.ok) {
+              const qrData = await qrCodeResponse.json();
+              console.log(`Resposta tentativa ${attempt}:`, JSON.stringify(qrData, null, 2));
+              
+              // Verificar se tem count > 0
+              if (qrData.count && qrData.count > 0) {
+                qrImage = extractQrCode(qrData);
+                
+                if (qrImage) {
+                  console.log('QR Code encontrado via connect!');
+                  break;
+                }
+              }
+              
+              if (!qrImage && attempt < 3) {
+                console.log('QR Code ainda não disponível. Aguardando 3 segundos...');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+              }
             }
           }
         }
