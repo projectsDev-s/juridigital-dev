@@ -48,31 +48,13 @@ function normalizeQrString(value: string | null | undefined): string | null {
 function extractQrCode(payload: any): string | null {
   if (!payload) return null;
 
+  // Evolution API retorna o QR code no campo 'code' (já é base64)
   const candidates = [
-    payload.code,  // Evolution API retorna assim
-    payload.base64,
-    payload.base64Image,
-    payload.image,
+    payload.code,  // Campo correto segundo documentação
     payload.qrcode?.code,
+    payload.qrCode?.code,
+    payload.base64,
     payload.qrcode?.base64,
-    payload.qrcode?.base64Image,
-    payload.qrcode?.image,
-    payload.qrCode,
-    payload.qrCode?.base64,
-    payload.qrCode?.base64Image,
-    payload.data?.qrcode?.base64,
-    payload.data?.qrcode?.base64Image,
-    payload.data?.qrCode,
-    payload.data?.qrCode?.base64,
-    payload.data?.qrCode?.base64Image,
-    payload.instance?.qrcode?.base64,
-    payload.instance?.qrcode?.base64Image,
-    payload.instance?.qrCode,
-    payload.instance?.qrCode?.base64,
-    payload.instance?.qrCode?.base64Image,
-    payload?.qrcodeUrl,
-    payload?.qrCodeUrl,
-    payload?.url,
   ];
 
   const raw = candidates.find((val) => typeof val === 'string' && val.length > 10);
@@ -181,81 +163,56 @@ serve(async (req) => {
       }
 
       const createResult = await createInstanceResponse.json();
-      console.log('Instância criada. Resposta:', JSON.stringify(createResult, null, 2));
+      console.log('Instância criada:', JSON.stringify(createResult, null, 2));
       
-      // Tentar extrair QR code da resposta de criação
-      qrImage = extractQrCode(createResult);
+      // O endpoint /instance/create NÃO retorna QR code
+      // Precisamos aguardar e buscar via /instance/connect
+      console.log('Aguardando 8 segundos para geração do QR Code...');
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
-      if (qrImage) {
-        console.log('QR Code encontrado na resposta de criação!');
-      } else {
-        // Se não veio na criação, aguardar e buscar via endpoint connect
-        console.log('QR Code não veio na criação. Aguardando 5 segundos para geração...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
+      // Buscar QR Code via endpoint /instance/connect (ÚNICO endpoint correto)
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        console.log(`Tentativa ${attempt}/5 de buscar QR Code...`);
         
-        // Tentar buscar QR Code via fetchInstances primeiro (pode ter informações mais completas)
-        console.log('Buscando informações completas da instância...');
-        const fetchResponse = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${INSTANCE_NAME}`, {
+        const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
           method: 'GET',
           headers: {
             'apikey': EVOLUTION_API_KEY,
           },
         });
-        
-        if (fetchResponse.ok) {
-          const fetchData = await fetchResponse.json();
-          console.log('Resposta fetchInstances:', JSON.stringify(fetchData, null, 2));
-          
-          // fetchInstances pode retornar um array
-          const instanceData = Array.isArray(fetchData) ? fetchData[0] : fetchData;
-          qrImage = extractQrCode(instanceData);
-          
-          if (qrImage) {
-            console.log('QR Code encontrado via fetchInstances!');
-          }
-        }
-        
-        // Se ainda não encontrou, tentar via endpoint connect
-        if (!qrImage) {
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            console.log(`Tentativa ${attempt} de buscar QR Code via connect...`);
-            
-            const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
-              method: 'GET',
-              headers: {
-                'apikey': EVOLUTION_API_KEY,
-              },
-            });
 
-            if (qrCodeResponse.ok) {
-              const qrData = await qrCodeResponse.json();
-              console.log(`Resposta tentativa ${attempt}:`, JSON.stringify(qrData, null, 2));
-              
-              // Verificar se tem count > 0
-              if (qrData.count && qrData.count > 0) {
-                qrImage = extractQrCode(qrData);
-                
-                if (qrImage) {
-                  console.log('QR Code encontrado via connect!');
-                  break;
-                }
-              }
-              
-              if (!qrImage && attempt < 3) {
-                console.log('QR Code ainda não disponível. Aguardando 3 segundos...');
-                await new Promise(resolve => setTimeout(resolve, 3000));
-              }
+        if (qrCodeResponse.ok) {
+          const qrData = await qrCodeResponse.json();
+          console.log(`Resposta:`, JSON.stringify(qrData, null, 2));
+          
+          // count > 0 significa que o QR code está disponível
+          if (qrData.count && qrData.count > 0 && qrData.code) {
+            qrImage = normalizeQrString(qrData.code);
+            
+            if (qrImage) {
+              console.log('✓ QR Code gerado com sucesso!');
+              break;
             }
+          }
+          
+          if (!qrImage && attempt < 5) {
+            console.log(`QR Code ainda não disponível (count: ${qrData.count || 0}). Aguardando 4 segundos...`);
+            await new Promise(resolve => setTimeout(resolve, 4000));
+          }
+        } else {
+          console.error(`Erro na requisição (${qrCodeResponse.status}):`, await qrCodeResponse.text());
+          if (attempt < 5) {
+            await new Promise(resolve => setTimeout(resolve, 4000));
           }
         }
       }
       
       if (!qrImage) {
-        console.error('QR Code não foi gerado após todas as tentativas');
-        throw new Error('QR Code não foi gerado pela Evolution API. Verifique se a Evolution API está funcionando corretamente ou tente novamente.');
+        console.error('✗ QR Code não foi gerado após todas as tentativas');
+        throw new Error('Não foi possível gerar o QR Code. A Evolution API pode estar demorando mais que o esperado. Tente novamente.');
       }
 
-      console.log('QR Code gerado com sucesso');
+      console.log('✓ QR Code obtido com sucesso');
 
       // Atualizar banco de dados
       const { error: updateError } = await supabase
