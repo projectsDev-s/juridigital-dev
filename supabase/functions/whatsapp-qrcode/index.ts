@@ -96,13 +96,51 @@ serve(async (req) => {
     console.log('Instance token presente:', !!INSTANCE_TOKEN);
 
     if (action === 'connect') {
-      console.log(`Buscando QR Code da instância existente: ${INSTANCE_NAME}`);
+      console.log(`Gerando novo QR Code para instância: ${INSTANCE_NAME}`);
       
       let qrImage: string | null = null;
       
-      // Buscar QR Code da instância existente
-      console.log('Aguardando 2 segundos antes de buscar QR Code...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Verificar estado atual da instância
+      const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
+        method: 'GET',
+        headers: {
+          'apikey': EVOLUTION_API_KEY,
+        },
+      });
+
+      if (checkInstanceResponse.ok) {
+        const connectionState = await checkInstanceResponse.json();
+        console.log('Estado atual da instância:', JSON.stringify(connectionState, null, 2));
+        
+        const instanceState = connectionState.state || connectionState.instance?.state;
+        
+        // Se a instância estiver conectada (open) ou desconectada (close), fazer logout para gerar novo QR
+        if (instanceState === 'open' || instanceState === 'close') {
+          console.log(`Instância no estado "${instanceState}". Fazendo logout para gerar novo QR Code...`);
+          
+          const logoutResponse = await fetch(`${EVOLUTION_API_URL}/instance/logout/${INSTANCE_NAME}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': EVOLUTION_API_KEY,
+            },
+          });
+          
+          if (logoutResponse.ok) {
+            console.log('Logout realizado com sucesso. Aguardando reconexão...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          } else {
+            const errorText = await logoutResponse.text();
+            console.log('Aviso ao fazer logout:', errorText);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        } else if (instanceState === 'connecting') {
+          console.log('Instância já está em processo de conexão');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } else {
+        console.log('Não foi possível verificar estado da instância. Continuando...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       
       for (let attempt = 1; attempt <= 10; attempt++) {
         console.log(`Tentativa ${attempt}/10 de buscar QR Code...`);
