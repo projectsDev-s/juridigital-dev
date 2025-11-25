@@ -99,6 +99,7 @@ serve(async (req) => {
       console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
       
       let qrImage: string | null = null;
+      let shouldCreateInstance = true;
       
       // Verificar se a instância existe e seu estado
       const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
@@ -114,12 +115,10 @@ serve(async (req) => {
         
         const instanceState = connectionState.state || connectionState.instance?.state;
         
-        // Se a instância já está conectada (open), deletar e recriar para gerar novo QR
-        // NÃO deletar se estiver "connecting" - esse é o estado correto para gerar QR!
         if (instanceState === 'open') {
-          console.log(`Instância no estado "${instanceState}". Deletando para gerar novo QR...`);
+          // Se já está conectada, deletar para gerar novo QR
+          console.log(`Instância no estado "open". Deletando para gerar novo QR...`);
           
-          // Deletar a instância completamente
           const deleteResponse = await fetch(`${EVOLUTION_API_URL}/instance/delete/${INSTANCE_NAME}`, {
             method: 'DELETE',
             headers: {
@@ -129,49 +128,56 @@ serve(async (req) => {
           
           if (deleteResponse.ok) {
             console.log('Instância deletada com sucesso');
+            await new Promise(resolve => setTimeout(resolve, 2000));
           } else {
-            console.log('Aviso: Falha ao deletar instância, continuando...');
+            console.log('Aviso: Falha ao deletar instância');
           }
-          
-          // Aguardar antes de recriar
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        } else if (instanceState === 'connecting') {
+          // Se já está em connecting, não precisa criar novamente
+          console.log(`Instância no estado "connecting". Usando instância existente.`);
+          shouldCreateInstance = false;
         }
       } else if (checkInstanceResponse.status !== 404) {
         const errorText = await checkInstanceResponse.text();
         console.error('Erro ao verificar instância:', errorText);
       }
       
-      // Criar ou recriar a instância
-      console.log('Criando instância...');
-      const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-        method: 'POST',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instanceName: INSTANCE_NAME,
-          token: INSTANCE_TOKEN || undefined,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
-        }),
-      });
+      // Criar instância apenas se necessário
+      if (shouldCreateInstance) {
+        console.log('Criando instância...');
+        const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+          method: 'POST',
+          headers: {
+            'apikey': EVOLUTION_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            instanceName: INSTANCE_NAME,
+            token: INSTANCE_TOKEN || undefined,
+            qrcode: true,
+            integration: 'WHATSAPP-BAILEYS',
+          }),
+        });
 
-      if (!createInstanceResponse.ok) {
-        const errorText = await createInstanceResponse.text();
-        console.error('Erro ao criar instância:', errorText);
-        throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
+        if (!createInstanceResponse.ok) {
+          const errorText = await createInstanceResponse.text();
+          console.error('Erro ao criar instância:', errorText);
+          throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
+        }
+
+        const createResult = await createInstanceResponse.json();
+        console.log('Instância criada:', JSON.stringify(createResult, null, 2));
+        
+        // Aguardar após criar
+        console.log('Aguardando 10 segundos para geração do QR Code...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      } else {
+        // Se a instância já existe, aguardar menos tempo
+        console.log('Aguardando 3 segundos antes de buscar QR Code...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
-
-      const createResult = await createInstanceResponse.json();
-      console.log('Instância criada:', JSON.stringify(createResult, null, 2));
       
-      // O endpoint /instance/create NÃO retorna QR code
-      // Precisamos aguardar e buscar via /instance/connect
-      console.log('Aguardando 10 segundos para geração do QR Code...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      
-      // Buscar QR Code via endpoint /instance/connect (ÚNICO endpoint correto)
+      // Buscar QR Code via endpoint /instance/connect
       for (let attempt = 1; attempt <= 8; attempt++) {
         console.log(`Tentativa ${attempt}/8 de buscar QR Code...`);
         
