@@ -96,29 +96,59 @@ serve(async (req) => {
     console.log('Instance token presente:', !!INSTANCE_TOKEN);
 
     if (action === 'connect') {
-      console.log(`Reiniciando instância para gerar novo QR Code: ${INSTANCE_NAME}`);
+      console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
       
       let qrImage: string | null = null;
       
-      // Reiniciar a instância para forçar geração de novo QR Code
-      console.log('Reiniciando instância...');
-      const restartResponse = await fetch(`${EVOLUTION_API_URL}/instance/restart/${INSTANCE_NAME}`, {
-        method: 'PUT',
+      // Deletar instância existente para forçar regeneração do QR Code
+      console.log('Deletando instância existente...');
+      const deleteResponse = await fetch(`${EVOLUTION_API_URL}/instance/delete/${INSTANCE_NAME}`, {
+        method: 'DELETE',
         headers: {
           'apikey': EVOLUTION_API_KEY,
         },
       });
 
-      if (restartResponse.ok) {
-        const restartResult = await restartResponse.json();
-        console.log('Instância reiniciada:', JSON.stringify(restartResult, null, 2));
-        console.log('Aguardando 8 segundos para geração do QR Code...');
-        await new Promise(resolve => setTimeout(resolve, 8000));
+      if (deleteResponse.ok) {
+        console.log('Instância deletada com sucesso');
+      } else if (deleteResponse.status === 404) {
+        console.log('Instância não existe ainda, será criada');
       } else {
-        const errorText = await restartResponse.text();
-        console.error('Erro ao reiniciar instância:', errorText);
-        throw new Error(`Falha ao reiniciar instância: ${restartResponse.status} - ${errorText}`);
+        const errorText = await deleteResponse.text();
+        console.log('Aviso ao deletar instância:', errorText);
       }
+      
+      // Aguardar um pouco após deletar
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Criar instância com o mesmo nome e token
+      console.log('Criando instância...');
+      const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+        method: 'POST',
+        headers: {
+          'apikey': EVOLUTION_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          instanceName: INSTANCE_NAME,
+          token: INSTANCE_TOKEN || undefined,
+          qrcode: true,
+          integration: 'WHATSAPP-BAILEYS',
+        }),
+      });
+
+      if (!createInstanceResponse.ok) {
+        const errorText = await createInstanceResponse.text();
+        console.error('Erro ao criar instância:', errorText);
+        throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
+      }
+
+      const createResult = await createInstanceResponse.json();
+      console.log('Instância criada:', JSON.stringify(createResult, null, 2));
+      
+      // Aguardar geração do QR Code
+      console.log('Aguardando 10 segundos para geração do QR Code...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
       for (let attempt = 1; attempt <= 10; attempt++) {
         console.log(`Tentativa ${attempt}/10 de buscar QR Code...`);
