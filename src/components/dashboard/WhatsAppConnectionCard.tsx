@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, CheckCircle2, XCircle, Wifi, AlertCircle } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Wifi } from "lucide-react";
 
 interface WhatsAppConnectionCardProps {
   tipo: "ia" | "escritorio";
@@ -15,19 +15,11 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   const [isConnecting, setIsConnecting] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
-  const [instanceId, setInstanceId] = useState<string>("");
-  const [configInfo, setConfigInfo] = useState<{ apiUrl: string; instanceName: string }>({
-    apiUrl: "",
-    instanceName: "",
-  });
-  const [configLoading, setConfigLoading] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
     loadInstanceData();
-    loadConfigInfo();
     
-    // Setup realtime subscription
+    // Setup realtime subscription apenas para QR code
     const channel = supabase
       .channel('whatsapp-instances-changes')
       .on(
@@ -39,74 +31,36 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
           filter: `tipo=eq.${tipo}`
         },
         (payload) => {
-          console.log('Realtime update:', payload);
           if (payload.new && typeof payload.new === 'object') {
             const newData = payload.new as any;
-            setStatus(newData.status || "disconnected");
             setQrCode(newData.qr_code);
-            setInstanceId(newData.id);
+            setStatus(newData.status || "disconnected");
           }
         }
       )
       .subscribe();
-
-    // Verificar status a cada 5 segundos
-    const interval = setInterval(loadInstanceData, 5000);
     
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(interval);
     };
   }, [tipo]);
-
-  const loadConfigInfo = async () => {
-    setConfigLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("evolution_config")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setConfigInfo({
-          apiUrl: data.api_url || "",
-          instanceName: data.instance_name || "",
-        });
-      } else {
-        setConfigInfo({
-          apiUrl: "",
-          instanceName: "",
-        });
-      }
-      setConfigError(null);
-    } catch (error) {
-      console.error("Erro ao carregar credenciais:", error);
-      setConfigError("Não foi possível carregar as credenciais da Evolution API.");
-    } finally {
-      setConfigLoading(false);
-    }
-  };
-
-  const isConfigReady = !!configInfo.apiUrl;
 
   const loadInstanceData = async () => {
     try {
       const { data, error } = await supabase
         .from("whatsapp_instances")
-        .select("*")
+        .select("qr_code, status")
         .eq("tipo", tipo)
         .single();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error("Erro ao carregar instância:", error);
+        return;
+      }
 
       if (data) {
-        setStatus(data.status || "disconnected");
         setQrCode(data.qr_code);
-        setInstanceId(data.instance_id || "");
+        setStatus(data.status || "disconnected");
       }
     } catch (error) {
       console.error("Erro ao carregar instância:", error);
@@ -114,19 +68,10 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleConnect = async () => {
-    if (!isConfigReady) {
-      toast.error("Configure as credenciais da Evolution API antes de conectar.");
-      return;
-    }
-
     setIsConnecting(true);
 
     try {
-      toast.info("Conectando à Evolution API...", {
-        description: configInfo.apiUrl
-          ? `Endpoint: ${configInfo.apiUrl}`
-          : "Configure o endpoint no menu Configurações",
-      });
+      toast.info("Gerando QR Code...");
 
       const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
         body: {
@@ -137,63 +82,20 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
       if (error) throw error;
 
-      if (!data.success) {
-        throw new Error('Falha ao gerar QR Code');
+      if (!data.success || !data.qrCode) {
+        throw new Error(data.error || 'Falha ao gerar QR Code');
       }
+
+      setQrCode(data.qrCode);
+      setStatus("connecting");
 
       toast.success("QR Code gerado!", {
         description: "Escaneie o código com seu WhatsApp",
       });
-
-      await loadInstanceData();
-
-      // Verificar status imediatamente após gerar QR code
-      setTimeout(async () => {
-        const { data: statusData } = await supabase.functions.invoke('whatsapp-qrcode', {
-          body: { action: 'status', tipo },
-        });
-        console.log('Status check after QR generation:', statusData);
-        await loadInstanceData();
-      }, 2000);
-
-      // Iniciar polling agressivo para verificar status de conexão
-      const checkInterval = setInterval(async () => {
-        try {
-          const { data: statusData, error: statusError } = await supabase.functions.invoke('whatsapp-qrcode', {
-            body: {
-              action: 'status',
-              tipo,
-            },
-          });
-
-          console.log('Polling status:', statusData);
-
-          if (statusError) {
-            console.error('Status error:', statusError);
-            clearInterval(checkInterval);
-            return;
-          }
-
-          await loadInstanceData();
-
-          if (statusData.status === 'connected') {
-            clearInterval(checkInterval);
-            toast.success("WhatsApp conectado!", {
-              description: `${titulo} conectado com sucesso`,
-            });
-          }
-        } catch (err) {
-          console.error('Erro ao verificar status:', err);
-        }
-      }, 3000);
-
-      // Limpar polling após 3 minutos
-      setTimeout(() => clearInterval(checkInterval), 180000);
-
     } catch (error: any) {
-      console.error("Erro ao conectar:", error);
-      toast.error("Erro ao conectar WhatsApp", {
-        description: error.message || "Verifique as credenciais da Evolution API",
+      console.error("Erro ao gerar QR Code:", error);
+      toast.error("Erro ao gerar QR Code", {
+        description: error.message || "Verifique as credenciais nas Configurações",
       });
     } finally {
       setIsConnecting(false);
@@ -201,11 +103,6 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   };
 
   const handleRefreshQRCode = async () => {
-    if (!isConfigReady) {
-      toast.error("Configure as credenciais antes de gerar um novo QR Code.");
-      return;
-    }
-
     setIsConnecting(true);
 
     try {
@@ -220,19 +117,19 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
       if (error) throw error;
 
-      if (!data.success) {
-        throw new Error('Falha ao gerar novo QR Code');
+      if (!data.success || !data.qrCode) {
+        throw new Error(data.error || 'Falha ao gerar novo QR Code');
       }
+
+      setQrCode(data.qrCode);
+      setStatus("connecting");
 
       toast.success("Novo QR Code gerado!", {
         description: "Escaneie o código com seu WhatsApp",
       });
-
-      await loadInstanceData();
-
     } catch (error: any) {
-      console.error("Erro ao atualizar QR Code:", error);
-      toast.error("Erro ao gerar novo QR Code", {
+      console.error("Erro ao gerar QR Code:", error);
+      toast.error("Erro ao gerar QR Code", {
         description: error.message,
       });
     } finally {
@@ -240,45 +137,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
     }
   };
 
-  const handleRefreshStatus = async () => {
-    if (!isConfigReady) {
-      toast.error("Configure as credenciais antes de verificar o status.");
-      return;
-    }
-
-    try {
-      toast.info("Verificando status...");
-
-      const { data, error } = await supabase.functions.invoke('whatsapp-qrcode', {
-        body: {
-          action: 'status',
-          tipo,
-        },
-      });
-
-      if (error) throw error;
-
-      console.log('Status manual check:', data);
-
-      await loadInstanceData();
-      
-      toast.success("Status atualizado", {
-        description: `Status: ${data.status === 'connected' ? 'Conectado' : data.status === 'connecting' ? 'Conectando' : 'Desconectado'}`,
-      });
-    } catch (error: any) {
-      console.error("Erro ao verificar status:", error);
-      toast.error("Erro ao verificar status", {
-        description: error.message,
-      });
-    }
-  };
-
   const handleDisconnect = async () => {
-    if (!isConfigReady) {
-      toast.error("Configure as credenciais antes de desconectar.");
-      return;
-    }
-
     try {
       toast.info("Desconectando...");
 
@@ -291,8 +150,10 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
 
       if (error) throw error;
 
+      setQrCode(null);
+      setStatus("disconnected");
+
       toast.success("WhatsApp desconectado");
-      await loadInstanceData();
     } catch (error: any) {
       console.error("Erro ao desconectar:", error);
       toast.error("Erro ao desconectar", {
@@ -335,49 +196,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-          <span className="text-sm font-medium">Status:</span>
-        <div className="p-3 rounded-lg border border-border/50 bg-background/60 space-y-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">Evolution API</p>
-          <p className="text-sm font-mono break-all">
-            {configLoading ? "Carregando endpoint..." : configInfo.apiUrl || "Não configurado"}
-          </p>
-          {configInfo.instanceName && (
-            <p className="text-xs text-muted-foreground">Instância configurada: {configInfo.instanceName}</p>
-          )}
-          {instanceId && (
-            <p className="text-xs text-muted-foreground">Registro atual: {instanceId}</p>
-          )}
-          {!configLoading && (!configInfo.apiUrl || configError) && (
-            <p className="text-xs text-destructive flex items-center gap-1">
-              <AlertCircle className="h-3.5 w-3.5" />
-              {configError || "Defina as credenciais em Configurações"}
-            </p>
-          )}
-        </div>
-
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-semibold ${
-              status === "connected" ? "text-green-600 dark:text-green-400" : 
-              status === "connecting" ? "text-yellow-600 dark:text-yellow-400" : 
-              "text-muted-foreground"
-            }`}>
-              {status === "connected" ? "Conectado" : 
-               status === "connecting" ? "Conectando..." : 
-               "Desconectado"}
-            </span>
-            <Button
-              onClick={handleRefreshStatus}
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-
-        {qrCode && status === "connecting" && (
+        {qrCode ? (
           <div className="space-y-3">
             <div className="flex justify-center p-4 bg-white rounded-lg">
               <img 
@@ -395,7 +214,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
                 {isConnecting ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Atualizando...
+                    Gerando...
                   </>
                 ) : (
                   <>
@@ -412,9 +231,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
               </Button>
             </div>
           </div>
-        )}
-
-        {status === "disconnected" && (
+        ) : (
           <Button
             onClick={handleConnect}
             disabled={isConnecting}
@@ -423,31 +240,12 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
             {isConnecting ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Conectando...
+                Gerando QR Code...
               </>
             ) : (
-              "Conectar"
+              "Gerar QR Code"
             )}
           </Button>
-        )}
-
-        {status === "connected" && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-              <div className="flex-1">
-                <p className="font-semibold text-green-900 dark:text-green-100">WhatsApp Conectado</p>
-                <p className="text-sm text-green-700 dark:text-green-300">Sua instância está ativa e pronta para uso</p>
-              </div>
-            </div>
-            <Button
-              onClick={handleDisconnect}
-              variant="destructive"
-              className="w-full"
-            >
-              Desconectar
-            </Button>
-          </div>
         )}
       </CardContent>
     </Card>

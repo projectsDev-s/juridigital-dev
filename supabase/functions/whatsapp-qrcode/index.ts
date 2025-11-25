@@ -109,16 +109,10 @@ serve(async (req) => {
     console.log('Tipo solicitado:', connectionType);
     console.log('Instance name:', INSTANCE_NAME);
 
-    const responseMeta = {
-      tipo: connectionType,
-      api_url: EVOLUTION_API_URL,
-      instance_name: INSTANCE_NAME,
-    };
-
     if (action === 'connect') {
-      console.log(`Connecting to instance: ${INSTANCE_NAME}`);
+      console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
       
-      // Primeiro, verificar se a instância existe
+      // Verificar se a instância existe
       const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
@@ -128,7 +122,7 @@ serve(async (req) => {
 
       // Se a instância não existe (404), criar ela
       if (checkInstanceResponse.status === 404) {
-        console.log(`Instance ${INSTANCE_NAME} does not exist. Creating...`);
+        console.log(`Instância ${INSTANCE_NAME} não existe. Criando...`);
         
         const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
           method: 'POST',
@@ -138,7 +132,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             instanceName: INSTANCE_NAME,
-            token: INSTANCE_TOKEN,
+            token: INSTANCE_TOKEN || undefined,
             qrcode: true,
             integration: 'WHATSAPP-BAILEYS',
           }),
@@ -146,21 +140,18 @@ serve(async (req) => {
 
         if (!createInstanceResponse.ok) {
           const errorText = await createInstanceResponse.text();
-          console.error('Error creating instance:', errorText);
-          throw new Error(`Failed to create instance: ${createInstanceResponse.status} - ${errorText}`);
+          console.error('Erro ao criar instância:', errorText);
+          throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
         }
 
-        const createData = await createInstanceResponse.json();
-        console.log('Instance created successfully:', createData);
-      } else if (!checkInstanceResponse.ok) {
+        console.log('Instância criada com sucesso');
+      } else if (!checkInstanceResponse.ok && checkInstanceResponse.status !== 200) {
         const errorText = await checkInstanceResponse.text();
-        console.error('Error checking instance:', errorText);
-        throw new Error(`Failed to check instance: ${checkInstanceResponse.status}`);
-      } else {
-        console.log(`Instance ${INSTANCE_NAME} already exists`);
+        console.error('Erro ao verificar instância:', errorText);
+        // Continuar mesmo com erro, tentar gerar QR code
       }
       
-      // Agora obter QR Code da instância
+      // Obter QR Code da instância
       const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
         method: 'GET',
         headers: {
@@ -170,13 +161,19 @@ serve(async (req) => {
 
       if (!qrCodeResponse.ok) {
         const errorText = await qrCodeResponse.text();
-        console.error('Error getting QR code:', errorText);
-        throw new Error(`Failed to get QR code: ${qrCodeResponse.status} - ${errorText}`);
+        console.error('Erro ao obter QR code:', errorText);
+        throw new Error(`Falha ao obter QR code: ${qrCodeResponse.status} - ${errorText}`);
       }
 
       const qrData = await qrCodeResponse.json();
       const qrImage = extractQrCode(qrData);
-      console.log('QR Code received. Has image?', !!qrImage);
+      
+      if (!qrImage) {
+        console.error('QR Code não encontrado na resposta:', JSON.stringify(qrData));
+        throw new Error('QR Code não foi retornado pela Evolution API');
+      }
+
+      console.log('QR Code gerado com sucesso');
 
       // Atualizar banco de dados
       const { error: updateError } = await supabase
@@ -189,15 +186,14 @@ serve(async (req) => {
         .eq('tipo', connectionType);
 
       if (updateError) {
-        console.error('Database update error:', updateError);
-        throw updateError;
+        console.error('Erro ao atualizar banco de dados:', updateError);
+        // Não falhar se o update der erro, o QR code já foi gerado
       }
 
       return new Response(
         JSON.stringify({
           success: true,
           qrCode: qrImage,
-          config: responseMeta,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -235,87 +231,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, config: responseMeta }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    if (action === 'status') {
-      console.log(`Checking status for instance: ${INSTANCE_NAME}`);
-      
-      // Verificar status na Evolution API
-      const statusResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
-        method: 'GET',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-        },
-      });
-
-      let statusData: any = null;
-      let mappedStatus = 'disconnected';
-      let ultimaConexao: string | null = null;
-      let statusError: string | null = null;
-
-      if (!statusResponse.ok) {
-        statusError = await statusResponse.text();
-        console.error('Error getting status:', statusError);
-      } else {
-        statusData = await statusResponse.json();
-        console.log('Status received from Evolution API:', JSON.stringify(statusData));
-
-        const actualState =
-          statusData.state ||
-          statusData?.instance?.state ||
-          statusData?.connectionStatus ||
-          statusData?.instance?.connectionStatus;
-
-        console.log('Actual state from Evolution:', actualState);
-
-        if (actualState === 'open' || actualState === 'connected') {
-          mappedStatus = 'connected';
-          ultimaConexao = new Date().toISOString();
-        } else if (
-          actualState === 'connecting' ||
-          actualState === 'pairing' ||
-          actualState === 'waiting_qr_scan'
-        ) {
-          mappedStatus = 'connecting';
-        } else {
-          mappedStatus = 'disconnected';
-        }
-      }
-      
-      console.log('Mapped status:', mappedStatus);
-
-      const statusUpdate: Record<string, any> = {
-        status: mappedStatus,
-        ultima_conexao: ultimaConexao,
-      };
-
-      if (mappedStatus !== 'connecting') {
-        statusUpdate.qr_code = null;
-      }
-
-      const { error: updateError } = await supabase
-        .from('whatsapp_instances')
-        .update(statusUpdate)
-        .eq('tipo', connectionType);
-
-      if (updateError) {
-        console.error('Database update error:', updateError);
-        throw updateError;
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          success: true,
-          status: mappedStatus,
-          config: responseMeta,
-          details: statusData,
-          error: statusError,
-        }),
+        JSON.stringify({ success: true }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
