@@ -146,9 +146,30 @@ serve(async (req) => {
       const createResult = await createInstanceResponse.json();
       console.log('Instância criada:', JSON.stringify(createResult, null, 2));
       
+      // Aguardar um pouco antes de iniciar conexão
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Iniciar conexão para gerar QR Code (POST request)
+      console.log('Iniciando conexão WhatsApp para gerar QR Code...');
+      const connectResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
+        method: 'POST',
+        headers: {
+          'apikey': EVOLUTION_API_KEY,
+        },
+      });
+
+      if (!connectResponse.ok) {
+        const errorText = await connectResponse.text();
+        console.error('Erro ao iniciar conexão:', errorText);
+        throw new Error(`Falha ao iniciar conexão: ${connectResponse.status} - ${errorText}`);
+      }
+
+      const connectResult = await connectResponse.json();
+      console.log('Conexão iniciada:', JSON.stringify(connectResult, null, 2));
+      
       // Aguardar geração do QR Code
-      console.log('Aguardando 10 segundos para geração do QR Code...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      console.log('Aguardando 5 segundos para geração do QR Code...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       for (let attempt = 1; attempt <= 10; attempt++) {
         console.log(`Tentativa ${attempt}/10 de buscar QR Code...`);
