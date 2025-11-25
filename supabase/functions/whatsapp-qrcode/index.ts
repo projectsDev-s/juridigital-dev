@@ -96,90 +96,16 @@ serve(async (req) => {
     console.log('Instance token presente:', !!INSTANCE_TOKEN);
 
     if (action === 'connect') {
-      console.log(`Gerando QR Code para instância: ${INSTANCE_NAME}`);
+      console.log(`Buscando QR Code da instância existente: ${INSTANCE_NAME}`);
       
       let qrImage: string | null = null;
-      let shouldCreateInstance = true;
       
-      // Verificar se a instância existe e seu estado
-      const checkInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${INSTANCE_NAME}`, {
-        method: 'GET',
-        headers: {
-          'apikey': EVOLUTION_API_KEY,
-        },
-      });
-
-      if (checkInstanceResponse.ok) {
-        const connectionState = await checkInstanceResponse.json();
-        console.log('Estado atual da instância:', JSON.stringify(connectionState, null, 2));
-        
-        const instanceState = connectionState.state || connectionState.instance?.state;
-        
-        if (instanceState === 'open') {
-          // Se já está conectada, deletar para gerar novo QR
-          console.log(`Instância no estado "open". Deletando para gerar novo QR...`);
-          
-          const deleteResponse = await fetch(`${EVOLUTION_API_URL}/instance/delete/${INSTANCE_NAME}`, {
-            method: 'DELETE',
-            headers: {
-              'apikey': EVOLUTION_API_KEY,
-            },
-          });
-          
-          if (deleteResponse.ok) {
-            console.log('Instância deletada com sucesso');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          } else {
-            console.log('Aviso: Falha ao deletar instância');
-          }
-        } else if (instanceState === 'connecting') {
-          // Se já está em connecting, não precisa criar novamente
-          console.log(`Instância no estado "connecting". Usando instância existente.`);
-          shouldCreateInstance = false;
-        }
-      } else if (checkInstanceResponse.status !== 404) {
-        const errorText = await checkInstanceResponse.text();
-        console.error('Erro ao verificar instância:', errorText);
-      }
+      // Buscar QR Code da instância existente
+      console.log('Aguardando 2 segundos antes de buscar QR Code...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Criar instância apenas se necessário
-      if (shouldCreateInstance) {
-        console.log('Criando instância...');
-        const createInstanceResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-          method: 'POST',
-          headers: {
-            'apikey': EVOLUTION_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            instanceName: INSTANCE_NAME,
-            token: INSTANCE_TOKEN || undefined,
-            qrcode: true,
-            integration: 'WHATSAPP-BAILEYS',
-          }),
-        });
-
-        if (!createInstanceResponse.ok) {
-          const errorText = await createInstanceResponse.text();
-          console.error('Erro ao criar instância:', errorText);
-          throw new Error(`Falha ao criar instância: ${createInstanceResponse.status} - ${errorText}`);
-        }
-
-        const createResult = await createInstanceResponse.json();
-        console.log('Instância criada:', JSON.stringify(createResult, null, 2));
-        
-        // Aguardar após criar
-        console.log('Aguardando 10 segundos para geração do QR Code...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      } else {
-        // Se a instância já existe, aguardar menos tempo
-        console.log('Aguardando 3 segundos antes de buscar QR Code...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-      
-      // Buscar QR Code via endpoint /instance/connect
-      for (let attempt = 1; attempt <= 8; attempt++) {
-        console.log(`Tentativa ${attempt}/8 de buscar QR Code...`);
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        console.log(`Tentativa ${attempt}/10 de buscar QR Code...`);
         
         const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
           method: 'GET',
@@ -202,21 +128,21 @@ serve(async (req) => {
             }
           }
           
-          if (!qrImage && attempt < 8) {
-            console.log(`QR Code ainda não disponível (count: ${qrData.count || 0}). Aguardando 5 segundos...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+          if (!qrImage && attempt < 10) {
+            console.log(`QR Code ainda não disponível (count: ${qrData.count || 0}). Aguardando 3 segundos...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
         } else {
           console.error(`Erro na requisição (${qrCodeResponse.status}):`, await qrCodeResponse.text());
-          if (attempt < 8) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
+          if (attempt < 10) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
         }
       }
       
       if (!qrImage) {
-        console.error('✗ QR Code não foi gerado após todas as tentativas');
-        throw new Error('Não foi possível gerar o QR Code. A Evolution API pode estar demorando mais que o esperado. Tente novamente.');
+        console.error('✗ QR Code não foi encontrado após todas as tentativas');
+        throw new Error('Não foi possível obter o QR Code da instância. Verifique se a instância está ativa na Evolution API e tente novamente.');
       }
 
       console.log('✓ QR Code obtido com sucesso');
