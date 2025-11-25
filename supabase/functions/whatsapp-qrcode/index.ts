@@ -114,9 +114,10 @@ serve(async (req) => {
         
         const instanceState = connectionState.state || connectionState.instance?.state;
         
-        // Se a instância está em qualquer estado que impeça gerar QR code, deletar e recriar
-        if (instanceState === 'open' || instanceState === 'connecting') {
-          console.log(`Instância no estado "${instanceState}". Deletando e recriando...`);
+        // Se a instância já está conectada (open), deletar e recriar para gerar novo QR
+        // NÃO deletar se estiver "connecting" - esse é o estado correto para gerar QR!
+        if (instanceState === 'open') {
+          console.log(`Instância no estado "${instanceState}". Deletando para gerar novo QR...`);
           
           // Deletar a instância completamente
           const deleteResponse = await fetch(`${EVOLUTION_API_URL}/instance/delete/${INSTANCE_NAME}`, {
@@ -167,12 +168,12 @@ serve(async (req) => {
       
       // O endpoint /instance/create NÃO retorna QR code
       // Precisamos aguardar e buscar via /instance/connect
-      console.log('Aguardando 8 segundos para geração do QR Code...');
-      await new Promise(resolve => setTimeout(resolve, 8000));
+      console.log('Aguardando 10 segundos para geração do QR Code...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
       // Buscar QR Code via endpoint /instance/connect (ÚNICO endpoint correto)
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        console.log(`Tentativa ${attempt}/5 de buscar QR Code...`);
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        console.log(`Tentativa ${attempt}/8 de buscar QR Code...`);
         
         const qrCodeResponse = await fetch(`${EVOLUTION_API_URL}/instance/connect/${INSTANCE_NAME}`, {
           method: 'GET',
@@ -195,14 +196,14 @@ serve(async (req) => {
             }
           }
           
-          if (!qrImage && attempt < 5) {
-            console.log(`QR Code ainda não disponível (count: ${qrData.count || 0}). Aguardando 4 segundos...`);
-            await new Promise(resolve => setTimeout(resolve, 4000));
+          if (!qrImage && attempt < 8) {
+            console.log(`QR Code ainda não disponível (count: ${qrData.count || 0}). Aguardando 5 segundos...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         } else {
           console.error(`Erro na requisição (${qrCodeResponse.status}):`, await qrCodeResponse.text());
-          if (attempt < 5) {
-            await new Promise(resolve => setTimeout(resolve, 4000));
+          if (attempt < 8) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         }
       }
