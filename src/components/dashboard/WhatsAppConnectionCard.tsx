@@ -16,6 +16,29 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
 
+  // Função para normalizar o QR code base64 para data URL
+  const normalizeQrCode = (qr: string | null): string | null => {
+    if (!qr || typeof qr !== 'string') return null;
+    const trimmed = qr.trim();
+    if (!trimmed) return null;
+    
+    // Se já é uma data URL, retorna como está
+    if (trimmed.startsWith('data:image')) {
+      return trimmed;
+    }
+    
+    // Se começa com http, é uma URL
+    if (trimmed.startsWith('http')) {
+      return trimmed;
+    }
+    
+    // Remove prefixo "base64," se existir
+    const base64Data = trimmed.replace(/^base64,/i, '');
+    
+    // Converte para data URL
+    return `data:image/png;base64,${base64Data}`;
+  };
+
   useEffect(() => {
     loadInstanceData();
     
@@ -33,7 +56,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         (payload) => {
           if (payload.new && typeof payload.new === 'object') {
             const newData = payload.new as any;
-            setQrCode(newData.qr_code);
+            setQrCode(normalizeQrCode(newData.qr_code));
             setStatus(newData.status || "disconnected");
           }
         }
@@ -59,7 +82,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
       }
 
       if (data) {
-        setQrCode(data.qr_code);
+        setQrCode(normalizeQrCode(data.qr_code));
         setStatus(data.status || "disconnected");
       }
     } catch (error) {
@@ -86,7 +109,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         throw new Error(data.error || 'Falha ao gerar QR Code');
       }
 
-      setQrCode(data.qrCode);
+      setQrCode(normalizeQrCode(data.qrCode));
       setStatus("connecting");
 
       toast.success("QR Code gerado!", {
@@ -121,7 +144,7 @@ const WhatsAppConnectionCard = ({ tipo, titulo, descricao }: WhatsAppConnectionC
         throw new Error(data.error || 'Falha ao gerar novo QR Code');
       }
 
-      setQrCode(data.qrCode);
+      setQrCode(normalizeQrCode(data.qrCode));
       setStatus("connecting");
 
       toast.success("Novo QR Code gerado!", {
