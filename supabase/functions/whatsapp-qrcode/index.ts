@@ -146,8 +146,8 @@ serve(async (req) => {
           console.log(`Resposta:`, JSON.stringify(qrData, null, 2));
           
           // count > 0 significa que o QR code está disponível
-          if (qrData.count && qrData.count > 0 && qrData.code) {
-            qrImage = normalizeQrString(qrData.code);
+          if (qrData.count && qrData.count > 0 && qrData.base64) {
+            qrImage = normalizeQrString(qrData.base64);
             
             if (qrImage) {
               console.log('✓ QR Code gerado com sucesso!');
