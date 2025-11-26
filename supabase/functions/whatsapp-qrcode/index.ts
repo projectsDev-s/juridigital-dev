@@ -48,13 +48,11 @@ function normalizeQrString(value: string | null | undefined): string | null {
 function extractQrCode(payload: any): string | null {
   if (!payload) return null;
 
-  // Evolution API retorna o QR code no campo 'code' (já é base64)
+  // Evolution API retorna o QR code no campo 'base64' (imagem base64)
   const candidates = [
-    payload.code,  // Campo correto segundo documentação
-    payload.qrcode?.code,
-    payload.qrCode?.code,
-    payload.base64,
+    payload.base64,  // Campo com a imagem base64
     payload.qrcode?.base64,
+    payload.qrCode?.base64,
   ];
 
   const raw = candidates.find((val) => typeof val === 'string' && val.length > 10);
